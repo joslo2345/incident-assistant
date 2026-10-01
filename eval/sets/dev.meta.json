@@ -1,0 +1,32 @@
+{
+  "runs": [
+    {
+      "run_id": "a6dev",
+      "start": "2026-09-29T19:12:29+00:00",
+      "end": "2026-10-01T19:12:29+00:00",
+      "duration_s": 172800,
+      "faults": 25,
+      "seed": 51,
+      "bmc_dropout": 0.5,
+      "events": 1104855,
+      "detector_run": "a6dev-v3-residual"
+    },
+    {
+      "run_id": "a6devnn",
+      "start": "2026-09-30T19:16:59+00:00",
+      "end": "2026-10-01T19:16:59+00:00",
+      "duration_s": 86400,
+      "faults": 8,
+      "seed": 61,
+      "bmc_dropout": 0.5,
+      "events": 552982,
+      "detector_run": "a6devnn-v3-residual"
+    }
+  ],
+  "cases": 25,
+  "not_detected": [
+    "a6dev/f002-noisy_neighbor",
+    "a6devnn/f006-noisy_neighbor",
+    "a6devnn/f004-noisy_neighbor"
+  ]
+}

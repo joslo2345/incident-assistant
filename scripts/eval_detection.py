@@ -75,6 +75,7 @@ def main() -> None:
     parser.add_argument("--faults", type=int, default=28)
     parser.add_argument("--seed", type=int, default=11)
     parser.add_argument("--bmc-dropout", type=float, default=0.5)
+    parser.add_argument("--fault-types", help="comma-separated failure types (default: all)")
     parser.add_argument("--skip-replay", action="store_true", help="Reuse data already replayed")
     args = parser.parse_args()
 
@@ -95,6 +96,8 @@ def main() -> None:
             "--seed", str(args.seed), "--bmc-dropout", str(args.bmc_dropout),
             "--ground-truth", str(run_dir / "ground_truth.jsonl"),
         ]  # fmt: skip
+        if args.fault_types:
+            cmd += ["--fault-types", args.fault_types]
         print(f"replaying {args.duration} with {args.faults} faults...", file=sys.stderr)
         stats = json.loads(
             subprocess.run(cmd, cwd=REPO, check=True, capture_output=True, text=True).stdout
@@ -133,8 +136,9 @@ def main() -> None:
         o, d = results[name]["overall"], results[name]["decoys"]
         ttd = "-" if o["ttd_median_s"] is None else f"{o['ttd_median_s'] / 60:.1f} min"
         prec = "-" if o["precision"] is None else f"{o['precision']:.0%}"
+        recall = "-" if o["recall"] is None else f"{o['recall']:.0%}"
         summary.append(
-            f"| {name} ({label}) | {o['recall']:.0%} | {prec} | {o['false_alarms']} | "
+            f"| {name} ({label}) | {recall} | {prec} | {o['false_alarms']} | "
             f"{d['raised_alarm']}/{d['decoys']} | {ttd} | "
             f"{o['classified_correctly']}/{o['detected']} |"
         )

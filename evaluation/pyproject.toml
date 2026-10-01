@@ -1,0 +1,27 @@
+[project]
+name = "incident-eval"
+version = "0.1.0"
+description = "Evaluation harness: labelled incident sets, scoring, an LLM judge for citation support, and recorded runs for CI"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "incident-contracts",
+    "incident-agent",
+    "incident-detector",
+    "asyncpg>=0.31",
+    "openai>=3.22",
+]
+
+[project.scripts]
+evaluate = "evaluation.cli:main"
+
+[tool.uv.sources]
+incident-contracts = { workspace = true }
+incident-agent = { workspace = true }
+incident-detector = { workspace = true }
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/evaluation"]

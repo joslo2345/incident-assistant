@@ -16,6 +16,7 @@ times out still leaves a complete trace up to that point.
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import logging
 import time
 import uuid
@@ -60,6 +61,10 @@ section that supports your recommended action.
 - Recommend drain_node or reset_gpu only when the evidence shows the hardware is failing; both go \
 to a human for approval. Prefer monitor or none for workload behaviour.
 """
+
+
+# Identifies the prompt a run used, so eval reports can tell prompt versions apart.
+PROMPT_SHA = hashlib.sha256(SYSTEM_PROMPT.encode()).hexdigest()[:12]
 
 
 @dataclass(frozen=True)
@@ -123,12 +128,14 @@ class Investigator:
         traces: TraceStore,
         budget: Budget | None = None,
         tools: frozenset[str] | None = None,
+        labels: dict[str, Any] | None = None,
     ) -> None:
         self.provider = provider
         self.toolbox = toolbox
         self.approvals = approvals
         self.traces = traces
         self.budget = budget or Budget()
+        self.labels = labels or {}  # stored with each run, e.g. an eval round and case
         self.allowed = tools if tools is not None else frozenset(TOOLS)
         if unknown := self.allowed - set(TOOLS):
             raise ValueError(f"unknown tools in allowlist: {sorted(unknown)}")
@@ -140,7 +147,12 @@ class Investigator:
             provider=self.provider.name,
             model=self.provider.model,
             started_at=datetime.now(UTC),
-            config={"budget": asdict(self.budget), "tools": sorted(self.allowed)},
+            config={
+                "budget": asdict(self.budget),
+                "tools": sorted(self.allowed),
+                "prompt_sha": PROMPT_SHA,
+                **self.labels,
+            },
         )
         await self.traces.start(run)
         state = _RunState(run, incident, ToolContext(f"agent:{run.run_id}", incident.incident_id,
