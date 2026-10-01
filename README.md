@@ -31,11 +31,21 @@ INGEST_API_KEYS=dev-key uv run uvicorn ingest.app:app --reload   # docs at http:
 The JSON Schemas and OpenAPI spec in `docs/schemas/` are generated from code. A test fails if
 they're out of date.
 
+## Docs
+
+- [Problem statement](docs/PROBLEM.md): who it's for and how success is measured
+- [Architecture](docs/ARCHITECTURE.md): components, data flow, contracts
+- [Decisions](docs/DECISIONS.md) and [Results](docs/RESULTS.md)
+
 ## Development
 
+Requires [uv](https://docs.astral.sh/uv/) and Docker.
+
 ```sh
-uv sync                                  # install (Python 3.12)
-uv run pytest                            # tests
-uv run ruff check . && uv run mypy libs services scripts tests
-uv run python scripts/export_schemas.py  # regenerate docs/schemas after changing a model or route
+make install   # uv sync (Python 3.12)
+make hooks     # install pre-commit hooks
+make check     # lint, strict mypy, tests, schema drift check: the same as CI
+make up        # build and start the local stack (ingest on :8000, key "dev-key")
+make down
+make schemas   # regenerate docs/schemas after changing a model or route
 ```

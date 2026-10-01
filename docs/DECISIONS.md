@@ -76,3 +76,18 @@ Running log of design choices: what was chosen, what was rejected, and why.
   back off before A1 implements the throttling.
 - **Errors use one `{error, message}` body**; 422 keeps FastAPI's validation format, which
   lists every field that failed.
+
+## 2026-10-01 · A0 · Tooling, CI and local stack
+
+- **Makefile as the single entry point** (`make check`, `make up`). CI runs the same commands, so
+  "green locally" means green in CI.
+- **Pre-commit** runs ruff, mypy and the schema drift check before each commit. The slower tests
+  run in CI only.
+- **Dockerfile:** two stages with uv, dependencies installed before the code is copied (better
+  layer caching), runs as a non-root user, and has a health check on `/healthz`. The build context
+  is the repo root so services can install `libs/contracts`.
+- **Compose file in `deploy/`** with only the services that exist so far. A2 adds Redpanda,
+  TimescaleDB, Prometheus and Grafana, rather than placeholder containers that do nothing.
+- **GitHub Actions:** one check job plus a Docker build matrix over services. Permissions are
+  read-only and the Docker build cache is stored in GitHub Actions. Rejected: pushing images to a
+  registry now (no consumer until A8).
