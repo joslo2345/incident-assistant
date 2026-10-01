@@ -1,0 +1,57 @@
+"""Write JSON Schema files for the contracts, and the OpenAPI spec, to docs/schemas/.
+
+Usage:
+    uv run python scripts/export_schemas.py           # write files
+    uv run python scripts/export_schemas.py --check   # fail if committed files are stale
+"""
+
+import json
+import sys
+from collections.abc import Callable
+from pathlib import Path
+from typing import Any
+
+from pydantic import BaseModel
+
+from incident_contracts import Incident, TelemetryBatch
+from ingest.app import app as ingest_app
+
+OUT_DIR = Path(__file__).resolve().parent.parent / "docs" / "schemas"
+
+
+def _dump(doc: dict[str, Any]) -> str:
+    return json.dumps(doc, indent=2, sort_keys=True) + "\n"
+
+
+def _model(model: type[BaseModel]) -> Callable[[], str]:
+    return lambda: _dump(model.model_json_schema())
+
+
+OUTPUTS: dict[str, Callable[[], str]] = {
+    "telemetry_batch.schema.json": _model(TelemetryBatch),
+    "incident.schema.json": _model(Incident),
+    "ingest.openapi.json": lambda: _dump(ingest_app.openapi()),
+}
+
+
+def main() -> int:
+    check = "--check" in sys.argv[1:]
+    stale = []
+    for filename, render in OUTPUTS.items():
+        path = OUT_DIR / filename
+        content = render()
+        if check:
+            if not path.exists() or path.read_text() != content:
+                stale.append(filename)
+        else:
+            OUT_DIR.mkdir(parents=True, exist_ok=True)
+            path.write_text(content)
+            print(f"wrote {path.relative_to(Path.cwd())}")
+    if stale:
+        print(f"stale schemas (run scripts/export_schemas.py): {', '.join(stale)}")
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

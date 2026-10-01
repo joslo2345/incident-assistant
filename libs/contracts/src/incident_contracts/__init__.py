@@ -1,0 +1,58 @@
+"""Shared contracts for the incident assistant: telemetry events and incident records."""
+
+from incident_contracts.common import SCHEMA_VERSION, FailureType
+from incident_contracts.incident import (
+    ActionType,
+    Citation,
+    ComponentKind,
+    ComponentRef,
+    DetectorKind,
+    Diagnosis,
+    Evidence,
+    Incident,
+    IncidentStatus,
+    RecommendedAction,
+    Severity,
+)
+from incident_contracts.telemetry import (
+    MAX_BATCH_SIZE,
+    BmcEntryCode,
+    BmcEntryType,
+    BmcLogEvent,
+    BmcSensorType,
+    BmcSeverity,
+    BmcSourceFormat,
+    GpuMetricsEvent,
+    TelemetryBatch,
+    TelemetryEvent,
+    ThrottleReason,
+    XidEvent,
+)
+
+__all__ = [
+    "MAX_BATCH_SIZE",
+    "SCHEMA_VERSION",
+    "ActionType",
+    "BmcEntryCode",
+    "BmcEntryType",
+    "BmcLogEvent",
+    "BmcSensorType",
+    "BmcSeverity",
+    "BmcSourceFormat",
+    "Citation",
+    "ComponentKind",
+    "ComponentRef",
+    "DetectorKind",
+    "Diagnosis",
+    "Evidence",
+    "FailureType",
+    "GpuMetricsEvent",
+    "Incident",
+    "IncidentStatus",
+    "RecommendedAction",
+    "Severity",
+    "TelemetryBatch",
+    "TelemetryEvent",
+    "ThrottleReason",
+    "XidEvent",
+]

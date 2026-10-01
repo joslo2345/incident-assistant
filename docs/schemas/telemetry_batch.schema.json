@@ -1,0 +1,518 @@
+{
+  "$defs": {
+    "BmcEntryCode": {
+      "description": "Redfish `EntryCode` for sensor entries: whether a condition started or cleared.",
+      "enum": [
+        "assert",
+        "deassert"
+      ],
+      "title": "BmcEntryCode",
+      "type": "string"
+    },
+    "BmcEntryType": {
+      "description": "Redfish `EntryType`. `sel` entries are IPMI SEL records surfaced through Redfish.",
+      "enum": [
+        "event",
+        "sel",
+        "oem"
+      ],
+      "title": "BmcEntryType",
+      "type": "string"
+    },
+    "BmcLogEvent": {
+      "additionalProperties": false,
+      "description": "A BMC log entry, normalized to the shape of a DMTF Redfish `LogEntry`.\n\n`timestamp` is the entry's Redfish `Created` time.",
+      "properties": {
+        "entry_code": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BmcEntryCode"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "entry_id": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Redfish `Id` on the BMC",
+          "title": "Entry Id"
+        },
+        "entry_type": {
+          "$ref": "#/$defs/BmcEntryType"
+        },
+        "event_id": {
+          "format": "uuid",
+          "title": "Event Id",
+          "type": "string"
+        },
+        "event_type": {
+          "const": "bmc_log",
+          "default": "bmc_log",
+          "title": "Event Type",
+          "type": "string"
+        },
+        "message": {
+          "maxLength": 2000,
+          "title": "Message",
+          "type": "string"
+        },
+        "message_args": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 32,
+          "title": "Message Args",
+          "type": "array"
+        },
+        "message_id": {
+          "description": "Registry message ID, e.g. \"OpenBMC.0.1.SensorThresholdCriticalLowGoingLow\" or a vendor ID like \"PSU0003\"",
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Message Id",
+          "type": "string"
+        },
+        "node_id": {
+          "maxLength": 64,
+          "minLength": 1,
+          "pattern": "^[a-z0-9][a-z0-9._-]*$",
+          "title": "Node Id",
+          "type": "string"
+        },
+        "reading": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reading"
+        },
+        "schema_version": {
+          "const": "1.0",
+          "default": "1.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "sensor_name": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "e.g. \"FAN3\", \"PSU1\"",
+          "title": "Sensor Name"
+        },
+        "sensor_number": {
+          "anyOf": [
+            {
+              "maximum": 255,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sensor Number"
+        },
+        "sensor_type": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BmcSensorType"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "severity": {
+          "$ref": "#/$defs/BmcSeverity"
+        },
+        "source_format": {
+          "$ref": "#/$defs/BmcSourceFormat",
+          "default": "redfish"
+        },
+        "timestamp": {
+          "format": "date-time",
+          "title": "Timestamp",
+          "type": "string"
+        },
+        "unit": {
+          "anyOf": [
+            {
+              "maxLength": 16,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "e.g. \"RPM\", \"Cel\", \"W\"",
+          "title": "Unit"
+        }
+      },
+      "required": [
+        "event_id",
+        "timestamp",
+        "node_id",
+        "entry_type",
+        "severity",
+        "message_id",
+        "message"
+      ],
+      "title": "BmcLogEvent",
+      "type": "object"
+    },
+    "BmcSensorType": {
+      "description": "Subset of Redfish `SensorType` (the IPMI sensor types) relevant to GPU servers.",
+      "enum": [
+        "temperature",
+        "voltage",
+        "current",
+        "fan",
+        "power_supply",
+        "power_unit",
+        "processor",
+        "memory",
+        "critical_interrupt",
+        "other"
+      ],
+      "title": "BmcSensorType",
+      "type": "string"
+    },
+    "BmcSeverity": {
+      "description": "Redfish `Severity`.",
+      "enum": [
+        "ok",
+        "warning",
+        "critical"
+      ],
+      "title": "BmcSeverity",
+      "type": "string"
+    },
+    "BmcSourceFormat": {
+      "description": "How the entry was collected before being normalized to this schema.",
+      "enum": [
+        "redfish",
+        "ipmi_sel",
+        "syslog"
+      ],
+      "title": "BmcSourceFormat",
+      "type": "string"
+    },
+    "GpuMetricsEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "ecc_dbe_total": {
+          "description": "Uncorrectable (double-bit) ECC errors",
+          "minimum": 0,
+          "title": "Ecc Dbe Total",
+          "type": "integer"
+        },
+        "ecc_sbe_total": {
+          "description": "Correctable (single-bit) ECC errors",
+          "minimum": 0,
+          "title": "Ecc Sbe Total",
+          "type": "integer"
+        },
+        "event_id": {
+          "format": "uuid",
+          "title": "Event Id",
+          "type": "string"
+        },
+        "event_type": {
+          "const": "gpu_metrics",
+          "default": "gpu_metrics",
+          "title": "Event Type",
+          "type": "string"
+        },
+        "gpu_index": {
+          "exclusiveMaximum": 16,
+          "minimum": 0,
+          "title": "Gpu Index",
+          "type": "integer"
+        },
+        "gpu_uuid": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Gpu Uuid"
+        },
+        "memory_temperature_c": {
+          "anyOf": [
+            {
+              "maximum": 150,
+              "minimum": -20,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Memory Temperature C"
+        },
+        "memory_total_mib": {
+          "exclusiveMinimum": 0,
+          "title": "Memory Total Mib",
+          "type": "integer"
+        },
+        "memory_used_mib": {
+          "minimum": 0,
+          "title": "Memory Used Mib",
+          "type": "integer"
+        },
+        "node_id": {
+          "maxLength": 64,
+          "minLength": 1,
+          "pattern": "^[a-z0-9][a-z0-9._-]*$",
+          "title": "Node Id",
+          "type": "string"
+        },
+        "nvlink_crc_errors_total": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Nvlink Crc Errors Total"
+        },
+        "pcie_replay_total": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Pcie Replay Total"
+        },
+        "power_limit_w": {
+          "exclusiveMinimum": 0,
+          "maximum": 2000,
+          "title": "Power Limit W",
+          "type": "number"
+        },
+        "power_w": {
+          "maximum": 2000,
+          "minimum": 0,
+          "title": "Power W",
+          "type": "number"
+        },
+        "retired_pages_total": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Retired Pages Total"
+        },
+        "schema_version": {
+          "const": "1.0",
+          "default": "1.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "sm_clock_mhz": {
+          "maximum": 5000,
+          "minimum": 0,
+          "title": "Sm Clock Mhz",
+          "type": "integer"
+        },
+        "temperature_c": {
+          "maximum": 150,
+          "minimum": -20,
+          "title": "Temperature C",
+          "type": "number"
+        },
+        "throttle_reasons": {
+          "items": {
+            "$ref": "#/$defs/ThrottleReason"
+          },
+          "title": "Throttle Reasons",
+          "type": "array"
+        },
+        "timestamp": {
+          "format": "date-time",
+          "title": "Timestamp",
+          "type": "string"
+        },
+        "utilization_pct": {
+          "maximum": 100,
+          "minimum": 0,
+          "title": "Utilization Pct",
+          "type": "number"
+        }
+      },
+      "required": [
+        "event_id",
+        "timestamp",
+        "node_id",
+        "gpu_index",
+        "temperature_c",
+        "power_w",
+        "power_limit_w",
+        "utilization_pct",
+        "memory_used_mib",
+        "memory_total_mib",
+        "sm_clock_mhz",
+        "ecc_sbe_total",
+        "ecc_dbe_total"
+      ],
+      "title": "GpuMetricsEvent",
+      "type": "object"
+    },
+    "ThrottleReason": {
+      "description": "Subset of NVML clock-throttle reasons that matter for diagnosis.",
+      "enum": [
+        "sw_power_cap",
+        "hw_slowdown",
+        "hw_thermal_slowdown",
+        "hw_power_brake_slowdown",
+        "sw_thermal_slowdown"
+      ],
+      "title": "ThrottleReason",
+      "type": "string"
+    },
+    "XidEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "event_id": {
+          "format": "uuid",
+          "title": "Event Id",
+          "type": "string"
+        },
+        "event_type": {
+          "const": "xid",
+          "default": "xid",
+          "title": "Event Type",
+          "type": "string"
+        },
+        "gpu_index": {
+          "exclusiveMaximum": 16,
+          "minimum": 0,
+          "title": "Gpu Index",
+          "type": "integer"
+        },
+        "message": {
+          "maxLength": 2000,
+          "title": "Message",
+          "type": "string"
+        },
+        "node_id": {
+          "maxLength": 64,
+          "minLength": 1,
+          "pattern": "^[a-z0-9][a-z0-9._-]*$",
+          "title": "Node Id",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0",
+          "default": "1.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "timestamp": {
+          "format": "date-time",
+          "title": "Timestamp",
+          "type": "string"
+        },
+        "xid_code": {
+          "description": "NVIDIA XID error code, e.g. 79 = fell off bus",
+          "maximum": 999,
+          "minimum": 1,
+          "title": "Xid Code",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "event_id",
+        "timestamp",
+        "node_id",
+        "gpu_index",
+        "xid_code",
+        "message"
+      ],
+      "title": "XidEvent",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Request body for POST /v1/telemetry.",
+  "properties": {
+    "events": {
+      "items": {
+        "discriminator": {
+          "mapping": {
+            "bmc_log": "#/$defs/BmcLogEvent",
+            "gpu_metrics": "#/$defs/GpuMetricsEvent",
+            "xid": "#/$defs/XidEvent"
+          },
+          "propertyName": "event_type"
+        },
+        "oneOf": [
+          {
+            "$ref": "#/$defs/GpuMetricsEvent"
+          },
+          {
+            "$ref": "#/$defs/XidEvent"
+          },
+          {
+            "$ref": "#/$defs/BmcLogEvent"
+          }
+        ]
+      },
+      "maxItems": 1000,
+      "minItems": 1,
+      "title": "Events",
+      "type": "array"
+    }
+  },
+  "required": [
+    "events"
+  ],
+  "title": "TelemetryBatch",
+  "type": "object"
+}
