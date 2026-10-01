@@ -1,7 +1,7 @@
 .DEFAULT_GOAL := help
 COMPOSE := docker compose -f deploy/compose.yaml
 
-.PHONY: help install hooks lint typecheck test test-integration schemas schemas-check dashboards check up down logs
+.PHONY: help env install hooks lint typecheck test test-integration schemas schemas-check dashboards check up down logs
 
 help:  ## List targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-14s %s\n", $$1, $$2}'
@@ -36,7 +36,10 @@ schemas-check:  ## Fail if docs/schemas is stale
 
 check: lint typecheck test schemas-check  ## Everything CI runs, except Docker builds
 
-up:  ## Build and start the local stack
+env:  ## Generate deploy/.env with random local secrets (once)
+	@uv run python scripts/gen_env.py
+
+up: env  ## Build and start the local stack
 	$(COMPOSE) up -d --build --wait
 
 down:  ## Stop the local stack

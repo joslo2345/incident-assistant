@@ -33,14 +33,15 @@ they're out of date.
 
 ## Local stack
 
-`make up` starts everything with Docker Compose (`deploy/compose.yaml`):
+`make up` starts everything with Docker Compose (`deploy/compose.yaml`). The first run generates
+random local secrets in `deploy/.env` (gitignored). All ports are bound to localhost only; see [SECURITY.md](SECURITY.md).
 
 | Service | URL | What it is |
 | --- | --- | --- |
 | Ingest API | http://localhost:8000/docs | `POST /v1/telemetry`, key `dev-key` |
-| Grafana | http://localhost:3000 | Fleet health and System health dashboards (anonymous view; admin/admin) |
+| Grafana | http://localhost:3000 | Fleet health and System health dashboards; log in as `admin`, password `GRAFANA_ADMIN_PASSWORD` in `deploy/.env` |
 | Prometheus | http://localhost:9090 | metrics from ingest, consumer, Redpanda |
-| TimescaleDB | localhost:5432 | db `telemetry`, user/password `postgres` |
+| TimescaleDB | localhost:5432 | db `telemetry`; roles `postgres` (migrations), `telemetry_writer`, `grafana_reader`; passwords in `deploy/.env` |
 | Redpanda | localhost:19092 | Kafka API; topics `telemetry.raw` (8 partitions), `telemetry.dlq` |
 
 Data flow: ingest → `telemetry.raw` → consumer → TimescaleDB (`gpu_metrics`, `xid_events`, `bmc_log`,
@@ -67,6 +68,7 @@ The workload slice is committed in `replayer/data/`. To rebuild it from the raw 
 - [Problem statement](docs/PROBLEM.md): who it's for and how success is measured
 - [Architecture](docs/ARCHITECTURE.md): components, data flow, contracts
 - [Decisions](docs/DECISIONS.md) and [Results](docs/RESULTS.md)
+- [Security](SECURITY.md): threat model, controls, review log
 
 ## Development
 

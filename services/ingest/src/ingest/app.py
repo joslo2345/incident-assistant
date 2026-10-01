@@ -6,6 +6,7 @@ flight means 429; a Kafka failure means 503. Either way the client retries the i
 """
 
 import contextlib
+import logging
 import secrets
 import time
 from collections.abc import AsyncIterator, Awaitable, Callable
@@ -21,8 +22,11 @@ from starlette.requests import Request
 from incident_contracts import SCHEMA_VERSION, TelemetryBatch, TelemetryEvent
 from incident_contracts.api import ErrorResponse, HealthResponse, IngestResponse
 from ingest.dedupe import RecentIds
+from ingest.limits import MaxBodySizeMiddleware
 from ingest.publisher import KafkaPublisher, MemoryPublisher, Publisher, PublishError
 from ingest.settings import Settings
+
+log = logging.getLogger("ingest")
 
 API_KEY_HEADER = "X-API-Key"
 _api_key_header = APIKeyHeader(name=API_KEY_HEADER, auto_error=False)
@@ -83,6 +87,7 @@ def create_app(settings: Settings | None = None, publisher: Publisher | None = N
         "entries (Redfish LogEntry shape).",
         lifespan=lifespan,
     )
+    app.add_middleware(MaxBodySizeMiddleware, max_bytes=settings.max_body_bytes)
     app.state.settings = settings
     app.state.publisher = publisher
     app.state.recent_ids = recent
@@ -115,6 +120,7 @@ def create_app(settings: Settings | None = None, publisher: Publisher | None = N
                 "model": ErrorResponse,
                 "description": "Overloaded; retry after the number of seconds in Retry-After",
             },
+            413: {"model": ErrorResponse, "description": "Request body too large"},
             503: {
                 "model": ErrorResponse,
                 "description": "Stream unavailable; retry after the number of seconds in "
@@ -150,10 +156,12 @@ def create_app(settings: Settings | None = None, publisher: Publisher | None = N
             except PublishError as exc:
                 # Nothing is remembered, so the retried batch is accepted in full. Events that did
                 # reach Kafka before the failure are deduplicated by the consumer's insert.
+                # Broker details go to the log, not to the client.
+                log.warning("publish failed: %s", exc)
                 raise ApiError(
                     status.HTTP_503_SERVICE_UNAVAILABLE,
                     "unavailable",
-                    f"Stream unavailable: {exc}",
+                    "Telemetry stream unavailable; retry later",
                     headers=retry_headers,
                 ) from exc
             finally:
