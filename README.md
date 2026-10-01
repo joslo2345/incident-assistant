@@ -3,7 +3,7 @@
 Replays GPU cluster telemetry, detects hardware anomalies, and has an agent investigate each
 incident and return a cited diagnosis and suggested fix.
 
-> Work in progress: A0 (foundation). The shared contracts and the ingestion API contract exist.
+> Work in progress: A1 (telemetry replay and ingestion) is done; next is A2 (Kafka, TimescaleDB, Grafana).
 
 ## Contracts
 
@@ -30,6 +30,21 @@ INGEST_API_KEYS=dev-key uv run uvicorn ingest.app:app --reload   # docs at http:
 
 The JSON Schemas and OpenAPI spec in `docs/schemas/` are generated from code. A test fails if
 they're out of date.
+
+## Telemetry replayer
+
+`replayer/` turns a day of real GPU-cluster load ([Alibaba cluster-trace-gpu-v2020](https://github.com/alibaba/clusterdata/tree/master/cluster-trace-gpu-v2020),
+CC BY 4.0) into DCGM-style metrics and Redfish BMC entries for a simulated fleet of 8 nodes × 8 GPUs
+(5 H100, 3 A100; see `replayer/fleet.toml`), and sends it to the ingest API.
+
+```sh
+make up
+uv run replay --duration 10m --speed 10          # 10 simulated minutes in 1 minute
+uv run replay --duration 3d --speed 0            # as fast as possible (throughput test)
+```
+
+The workload slice is committed in `replayer/data/`. To rebuild it from the raw trace (~1 GB download):
+`scripts/download_alibaba_trace.sh && uv run replay-prepare`.
 
 ## Docs
 

@@ -254,6 +254,20 @@
           "title": "Gpu Index",
           "type": "integer"
         },
+        "gpu_model": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "As DCGM reports it, e.g. \"NVIDIA H100 80GB HBM3\"",
+          "title": "Gpu Model"
+        },
         "gpu_uuid": {
           "anyOf": [
             {

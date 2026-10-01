@@ -24,7 +24,7 @@ jobs:
       - run: uv sync --frozen
       - run: uv run ruff check --output-format=github .
       - run: uv run ruff format --check .
-      - run: uv run mypy libs services scripts tests
+      - run: uv run mypy libs services replayer scripts tests
       - run: uv run pytest
       - run: uv run python scripts/export_schemas.py --check
 

@@ -42,6 +42,9 @@ class GpuMetricsEvent(_EventBase):
     event_type: Literal["gpu_metrics"] = "gpu_metrics"
     gpu_index: GpuIndex
     gpu_uuid: str | None = Field(default=None, max_length=64)
+    gpu_model: str | None = Field(
+        default=None, max_length=64, description='As DCGM reports it, e.g. "NVIDIA H100 80GB HBM3"'
+    )
 
     # Thermals and power
     temperature_c: float = Field(ge=-20, le=150)

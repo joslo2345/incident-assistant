@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "AI incident assistant for GPU fleets"
 readme = "README.md"
 requires-python = ">=3.12,<3.13"
-dependencies = ["incident-contracts", "incident-ingest"]
+dependencies = ["incident-contracts", "incident-ingest", "incident-replayer[prepare]"]
 
 [dependency-groups]
 dev = [
@@ -18,11 +18,12 @@ dev = [
 package = false
 
 [tool.uv.workspace]
-members = ["libs/*", "services/ingest"]
+members = ["libs/*", "services/ingest", "replayer"]
 
 [tool.uv.sources]
 incident-contracts = { workspace = true }
 incident-ingest = { workspace = true }
+incident-replayer = { workspace = true }
 
 [tool.ruff]
 line-length = 100
@@ -37,8 +38,8 @@ strict = true
 plugins = ["pydantic.mypy"]
 
 [tool.pytest.ini_options]
-testpaths = ["libs", "services", "tests"]
+testpaths = ["libs", "services", "replayer", "tests"]
 addopts = "--import-mode=importlib"
 
 [tool.ruff.lint.isort]
-known-first-party = ["incident_contracts", "ingest"]
+known-first-party = ["incident_contracts", "ingest", "replayer"]

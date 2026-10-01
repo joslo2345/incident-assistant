@@ -17,7 +17,7 @@ lint:  ## Ruff lint and format check
 	uv run ruff format --check .
 
 typecheck:  ## Strict mypy
-	uv run mypy libs services scripts tests
+	uv run mypy libs services replayer scripts tests
 
 test:  ## Run tests
 	uv run pytest
