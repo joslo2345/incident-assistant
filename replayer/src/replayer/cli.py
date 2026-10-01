@@ -76,7 +76,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument(
         "--run-id",
         type=_run_id,
-        default="",
+        default=None,  # not "": argparse runs `type` on string defaults too
         help="Prefix node IDs with '<run-id>-' so this run's data can be told apart",
     )
     p.add_argument("--faults", type=int, default=0, help="Number of faults to inject")
