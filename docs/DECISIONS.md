@@ -187,3 +187,17 @@ Running log of design choices: what was chosen, what was rejected, and why.
   a counter reset after a driver reload isn't shown as new errors or as negative errors.
 - **Known gap:** murmur2 hashing of 8 node IDs into 8 partitions leaves some partitions empty and
   doubles up others. That's fine at this scale; with more nodes the spread evens out.
+
+## 2026-10-01 · Security review before A3
+
+- **Found and fixed a critical issue:** Grafana's anonymous viewer access plus a superuser
+  datasource let anyone who could reach port 3000 run arbitrary SQL as the Postgres superuser,
+  and every port was reachable from the LAN. Both were verified, then fixed (see `SECURITY.md`).
+- **Chose defense in depth over a single fix:** localhost-only ports, no anonymous access, AND
+  least-privilege DB roles, AND escaped template variables. Each layer alone would have stopped it.
+- **Chose generated per-machine secrets** (`make env`) over documented defaults: Compose refuses
+  to start without them, so a default password can't slip through.
+- **CI now gates on security:** gitleaks, pip-audit, Trivy config and image scans (fixable
+  HIGH/CRITICAL fail the build). This moves part of A8 earlier because it was cheap and caught real issues.
+- Lesson for the case study: the convenient demo settings (anonymous dashboards, default passwords,
+  `0.0.0.0` ports) combined into a remote-code-execution path that no single setting showed.

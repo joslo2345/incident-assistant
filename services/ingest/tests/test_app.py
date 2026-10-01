@@ -167,3 +167,34 @@ def test_openapi_documents_contract() -> None:
     post_op = spec["paths"]["/v1/telemetry"]["post"]
     assert set(post_op["responses"]) >= {"202", "401", "422", "429", "503"}
     assert spec["components"]["securitySchemes"]["APIKeyHeader"]["name"] == API_KEY_HEADER
+
+
+def test_oversized_body_rejected_before_parsing() -> None:
+    with TestClient(create_app(Settings(api_keys=frozenset({KEY}), max_body_bytes=1000))) as c:
+        big = {"events": [xid_event() for _ in range(20)]}  # ~5 KB
+        # No API key: the size check runs first, so nothing is parsed for anonymous clients.
+        resp = c.post("/v1/telemetry", json=big)
+        assert resp.status_code == 413
+        assert resp.json()["error"] == "too_large"
+
+
+def test_oversized_chunked_body_rejected() -> None:
+    def chunks() -> Iterator[bytes]:
+        for _ in range(10):
+            yield b" " * 500  # no Content-Length header: sent chunked
+
+    with TestClient(create_app(Settings(api_keys=frozenset({KEY}), max_body_bytes=1000))) as c:
+        resp = c.post(
+            "/v1/telemetry",
+            content=chunks(),
+            headers={API_KEY_HEADER: KEY, "Content-Type": "application/json"},
+        )
+        assert resp.status_code == 413
+
+
+def test_503_does_not_leak_broker_details() -> None:
+    publisher = MemoryPublisher()
+    with TestClient(create_app(Settings(api_keys=frozenset({KEY})), publisher)) as client:
+        publisher.fail_next = RuntimeError("KafkaConnectionError: redpanda:9092 refused")
+        body = post(client, {"events": [xid_event()]}).json()
+        assert "redpanda" not in body["message"] and "9092" not in body["message"]

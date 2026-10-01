@@ -1,4 +1,6 @@
 # Local stack. Run with `make up` from the repo root.
+# Every port is published on 127.0.0.1 only: nothing here has TLS or Kafka auth (that's A8),
+# so it must not be reachable from the network. Secrets come from deploy/.env (`make env`).
 #   A3: detector   A5: agent   A7: ui
 name: incident-assistant
 
@@ -16,8 +18,8 @@ services:
       - --rpc-addr=redpanda:33145
       - --advertise-rpc-addr=redpanda:33145
     ports:
-      - "19092:19092"   # Kafka API for tools on the host
-      - "9644:9644"     # admin API + metrics
+      - "127.0.0.1:19092:19092"   # Kafka API for tools on the host
+      - "127.0.0.1:9644:9644"     # admin API + metrics
     volumes:
       - redpanda-data:/var/lib/redpanda/data
     healthcheck:
@@ -45,9 +47,9 @@ services:
     environment:
       POSTGRES_DB: telemetry
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?run `make env` first}
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - timescale-data:/var/lib/postgresql/data
     healthcheck:
@@ -64,7 +66,10 @@ services:
     image: incident-assistant/consumer:dev
     command: ["python", "-m", "consumer.migrate"]
     environment:
-      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgres}@timescaledb:5432/telemetry
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:?run `make env` first}@timescaledb:5432/telemetry
+      # The migrate step sets these roles' passwords; they're never stored in SQL files.
+      CONSUMER_DB_PASSWORD: ${CONSUMER_DB_PASSWORD:?run `make env` first}
+      GRAFANA_DB_PASSWORD: ${GRAFANA_DB_PASSWORD:?run `make env` first}
     depends_on:
       timescaledb: { condition: service_healthy }
 
@@ -76,7 +81,7 @@ services:
     image: incident-assistant/ingest:dev
     command: ["uvicorn", "ingest.app:app", "--host", "0.0.0.0", "--port", "8000"]
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     environment:
       INGEST_API_KEYS: ${INGEST_API_KEYS:-dev-key}
       KAFKA_BOOTSTRAP: redpanda:9092
@@ -95,7 +100,8 @@ services:
     command: ["python", "-m", "consumer.main"]
     environment:
       KAFKA_BOOTSTRAP: redpanda:9092
-      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgres}@timescaledb:5432/telemetry
+      # Least privilege: INSERT/SELECT on telemetry tables only (migration 004).
+      DATABASE_URL: postgresql://telemetry_writer:${CONSUMER_DB_PASSWORD:?run `make env` first}@timescaledb:5432/telemetry
     depends_on:
       topics: { condition: service_completed_successfully }
       migrate: { condition: service_completed_successfully }
@@ -112,7 +118,7 @@ services:
       - --config.file=/etc/prometheus/prometheus.yml
       - --storage.tsdb.retention.time=7d
     ports:
-      - "9090:9090"
+      - "127.0.0.1:9090:9090"
     volumes:
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
     restart: unless-stopped
@@ -120,13 +126,16 @@ services:
   grafana:
     image: grafana/grafana:13.2.3
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"
     environment:
-      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      # Anonymous users could send arbitrary queries to the datasources, so it's off by default.
+      GF_AUTH_ANONYMOUS_ENABLED: ${GRAFANA_ANONYMOUS:-false}
       GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
-      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?run `make env` first}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
       GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/fleet-health.json
-      TSDB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      TSDB_PASSWORD: ${GRAFANA_DB_PASSWORD:?run `make env` first}
     volumes:
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
       - ./grafana/dashboards:/var/lib/grafana/dashboards:ro

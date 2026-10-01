@@ -1,5 +1,8 @@
 """Generate the Grafana dashboards in deploy/grafana/dashboards/.
 
+Template variables in SQL always use ${var:sqlstring}, which quotes each value and escapes
+single quotes. Viewers can set variables through the URL, so raw $var would be SQL injection.
+
 Dashboards are defined here as code and written as JSON that Grafana provisions at startup.
 Edit this file, not the JSON:  uv run python scripts/build_dashboards.py
 """
@@ -124,14 +127,14 @@ ECC_INCREASE = (
     "SELECT bucket, node_id, gpu_index, gpu_model, "
     "greatest(ecc_sbe_total - lag(ecc_sbe_total) OVER w, 0) AS new_sbe, "
     "greatest(ecc_dbe_total - lag(ecc_dbe_total) OVER w, 0) AS new_dbe "
-    "FROM gpu_metrics_1m WHERE $__timeFilter(bucket) AND node_id IN ($node) "
+    "FROM gpu_metrics_1m WHERE $__timeFilter(bucket) AND node_id IN (${node:sqlstring}) "
     "WINDOW w AS (PARTITION BY node_id, gpu_index ORDER BY bucket)"
 )
 
 
 def fleet_health() -> dict[str, Any]:
     lay = Layout()
-    node_filter = "node_id IN ($node)"
+    node_filter = "node_id IN (${node:sqlstring})"
     panels = [
         lay.place(
             stat(
@@ -269,7 +272,7 @@ def fleet_health() -> dict[str, Any]:
                     sql(
                         "SELECT $__timeGroupAlias(bucket, $__interval), 'GPU ' || gpu_index AS metric, "
                         "max(temp_max) AS value FROM gpu_metrics_1m "
-                        "WHERE $__timeFilter(bucket) AND node_id = '$gpu_node' GROUP BY 1, 2 ORDER BY 1"
+                        "WHERE $__timeFilter(bucket) AND node_id = ${gpu_node:sqlstring} GROUP BY 1, 2 ORDER BY 1"
                     )
                 ],
                 "celsius",
