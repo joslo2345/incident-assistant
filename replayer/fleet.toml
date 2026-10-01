@@ -1,0 +1,36 @@
+# Default simulated fleet: 8 nodes x 8 GPUs, mixed H100 and A100.
+# Node N takes its workload from machine N in the slice (replayer/data/alibaba_slice.csv).
+sample_interval_s = 10
+inlet_temp_c = 24.0
+
+[[nodes]]
+id = "h100-node-01"
+profile = "h100_sxm"
+
+[[nodes]]
+id = "h100-node-02"
+profile = "h100_sxm"
+
+[[nodes]]
+id = "h100-node-03"
+profile = "h100_sxm"
+
+[[nodes]]
+id = "h100-node-04"
+profile = "h100_sxm"
+
+[[nodes]]
+id = "h100-node-05"
+profile = "h100_sxm"
+
+[[nodes]]
+id = "a100-node-01"
+profile = "a100_sxm"
+
+[[nodes]]
+id = "a100-node-02"
+profile = "a100_sxm"
+
+[[nodes]]
+id = "a100-node-03"
+profile = "a100_sxm"

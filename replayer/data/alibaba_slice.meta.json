@@ -1,0 +1,27 @@
+{
+  "source": "Alibaba cluster-trace-gpu-v2020 (pai_instance_table, pai_sensor_table, pai_machine_spec)",
+  "source_url": "https://github.com/alibaba/clusterdata/tree/master/cluster-trace-gpu-v2020",
+  "license": "CC BY 4.0. Derived data: rows filtered, times shifted, multi-GPU instances split across GPUs.",
+  "trace_day": 30,
+  "min_mean_util_pct": 40.0,
+  "window_s": 86400,
+  "machines": [
+    "3b53844f3c85dcab47e45f1a",
+    "0da924447bdd80bba7e41289",
+    "047b3b114e3a7149f5debddc",
+    "1a665ee7c93b2234b7f2c17f",
+    "db371c40a03b2ddc4f51546a",
+    "e7bfc0de59a0561190961399",
+    "e8c5dc8ce045e7de2880c873",
+    "161710c9cb5a548632300f11"
+  ],
+  "rows": 248,
+  "columns": {
+    "node": "index into the selected machines (0-based)",
+    "gpu": "GPU index on the machine",
+    "start_s": "instance start, seconds from window start",
+    "end_s": "instance end, seconds from window start",
+    "util_pct": "lifetime-average GPU utilization this instance put on this GPU",
+    "mem_gib": "lifetime-average GPU memory this instance used on this GPU"
+  }
+}
