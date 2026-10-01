@@ -3,6 +3,7 @@
 Examples:
     uv run replay --duration 10m --speed 10                 # 10 simulated minutes in 1 minute
     uv run replay --duration 1h --speed 0 --concurrency 8   # as fast as possible (throughput)
+    uv run replay --duration 3d --speed 0 --start now-3d    # backfill the last 3 days
 """
 
 import argparse
@@ -10,7 +11,7 @@ import asyncio
 import json
 import os
 import re
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import httpx2
@@ -32,6 +33,22 @@ def parse_duration(text: str) -> float:
     return float(match[1]) * _UNITS[match[2] or "s"]
 
 
+def parse_start(text: str) -> datetime:
+    """'now', 'now-3d' (relative to now), or an ISO 8601 time with a timezone."""
+    now = datetime.now(UTC).replace(microsecond=0)
+    if text == "now":
+        return now
+    if text.startswith("now-"):
+        return now - timedelta(seconds=parse_duration(text.removeprefix("now-")))
+    try:
+        start = datetime.fromisoformat(text)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(f"invalid start: {text!r}") from exc
+    if start.tzinfo is None:
+        raise argparse.ArgumentTypeError("start time needs a timezone, e.g. 2026-10-01T00:00Z")
+    return start
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description="Replay GPU telemetry into the ingest API.")
     p.add_argument("--api-url", default=os.environ.get("REPLAY_API_URL", "http://localhost:8000"))
@@ -39,6 +56,12 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--duration", type=parse_duration, default=parse_duration("10m"))
     p.add_argument("--speed", type=float, default=1.0, help="1-100x real time; 0 = max")
     p.add_argument("--offset", type=parse_duration, default=0.0, help="Start point in the slice")
+    p.add_argument(
+        "--start",
+        type=parse_start,
+        default="now",
+        help="Timestamp of the first sample: now, -3d, ISO",
+    )
     p.add_argument("--batch-size", type=int, default=500)
     p.add_argument("--concurrency", type=int, default=4)
     p.add_argument("--seed", type=int, default=0)
@@ -51,7 +74,7 @@ async def run(args: argparse.Namespace) -> dict[str, float]:
     sim = FleetSimulator(
         Fleet.load(args.fleet),
         Workload.load(args.slice),
-        start=datetime.now(UTC).replace(microsecond=0),
+        start=args.start,
         seed=args.seed,
         offset_s=args.offset,
     )

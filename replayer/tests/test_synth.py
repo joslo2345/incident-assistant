@@ -1,10 +1,11 @@
+import argparse
 import random
 import statistics
 
 import pytest
 
 from incident_contracts import BmcEntryCode, GpuMetricsEvent, ThrottleReason
-from replayer.cli import parse_duration
+from replayer.cli import parse_duration, parse_start
 from replayer.fleet import PROFILES, Fleet
 from replayer.synth import BmcNoise, FleetSimulator
 from replayer.workload import GpuLoad, Workload
@@ -112,3 +113,10 @@ def test_bmc_warnings_assert_then_clear() -> None:
 )
 def test_parse_duration(text: str, seconds: float) -> None:
     assert parse_duration(text) == seconds
+
+
+def test_parse_start() -> None:
+    assert parse_start("2026-10-01T00:00:00+00:00") == START
+    assert abs((parse_start("now") - parse_start("now-1h")).total_seconds() - 3600) < 2
+    with pytest.raises(argparse.ArgumentTypeError, match="timezone"):
+        parse_start("2026-10-01T00:00:00")

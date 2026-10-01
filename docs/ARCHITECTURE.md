@@ -46,9 +46,9 @@ flowchart LR
 | Component | Package | Responsibility | Talks to |
 | --- | --- | --- | --- |
 | Replayer | A1, A3 | Turns public cluster traces into per-GPU telemetry at 1x–100x speed and injects labeled faults (ground truth in a file) | Ingest API |
-| Ingest API | A0, A1 | Authenticates, validates and deduplicates batches, applies backpressure (429), publishes to the stream | Redpanda |
+| Ingest API | A0–A2 | Authenticates, validates and deduplicates batches, publishes to the stream and answers 202 only after Kafka acks; 429 when too many events are in flight, 503 if Kafka is down | Redpanda |
 | Redpanda | A2 | Durable buffer between ingestion and storage. Kafka-compatible, lighter locally | Ingest, consumer |
-| Consumer | A2 | At-least-once batch inserts into TimescaleDB, idempotent on `event_id`, sends bad events to the dead-letter topic | Redpanda, TimescaleDB |
+| Consumer | A2 | Batches of up to 5000 messages: validate, send invalid ones to the DLQ, COPY + `ON CONFLICT DO NOTHING` into TimescaleDB, then commit offsets (at-least-once, idempotent) | Redpanda, TimescaleDB |
 | TimescaleDB | A2 | Raw telemetry plus 1-minute and 1-hour continuous aggregates, with retention policies | Consumer, detector, MCP tools |
 | Detector | A3 | Thresholds, per-GPU rolling z-scores and event matching (XID, critical BMC entries), then groups related alerts into one incident with evidence windows | TimescaleDB, Postgres |
 | Knowledge base | A4 | Runbooks, vendor docs and past incidents, chunked by heading, hybrid search (vector + keyword) plus reranking, in pgvector | Postgres |
@@ -74,8 +74,9 @@ Every component shares one package of models, `libs/contracts`. Generated schema
 
 - **Ordering per node.** Events are partitioned by `node_id`, so one node's events stay in order.
   Nothing requires ordering across nodes.
-- **No loss, no duplicates.** The stream delivers at least once, and inserts are idempotent on
-  `event_id`, so retries and consumer restarts don't duplicate data (tested in A2).
+- **No loss, no duplicates.** A 202 means the events are in Kafka. The consumer commits offsets only
+  after the database commit, and inserts are idempotent on `(event_id, time)`, so retries and consumer
+  crashes neither lose nor duplicate data. Integration tests SIGKILL the consumer and force redelivery to prove it.
 - **The agent can't change the fleet.** Every tool is read-only except `drain_node`, which only
   creates an approval request. Whether an action needs approval comes from its type in the
   contract, not from the model.
