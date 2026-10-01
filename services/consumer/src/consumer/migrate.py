@@ -1,5 +1,8 @@
 """Applies deploy/db/migrations/*.sql in order, each once, each in its own transaction.
 
+Then, for each service role whose password variable is set (CONSUMER_DB_PASSWORD,
+GRAFANA_DB_PASSWORD), enables login with that password. Passwords never appear in SQL files.
+
 Usage: python -m consumer.migrate [--dir deploy/db/migrations]
 """
 
@@ -13,6 +16,10 @@ import asyncpg
 from consumer.settings import Settings
 
 DEFAULT_DIR = Path(os.environ.get("MIGRATIONS_DIR", "deploy/db/migrations"))
+ROLE_PASSWORD_VARS = {
+    "telemetry_writer": "CONSUMER_DB_PASSWORD",
+    "grafana_reader": "GRAFANA_DB_PASSWORD",
+}
 
 
 async def migrate(database_url: str, migrations_dir: Path) -> list[str]:
@@ -33,6 +40,15 @@ async def migrate(database_url: str, migrations_dir: Path) -> list[str]:
                 await conn.execute(path.read_text())
                 await conn.execute("INSERT INTO schema_migrations (name) VALUES ($1)", path.name)
             applied.append(path.name)
+        for role, var in ROLE_PASSWORD_VARS.items():
+            if password := os.environ.get(var):
+                # DDL can't take bind parameters; format() with %I/%L quotes them server-side.
+                stmt = await conn.fetchval(
+                    "SELECT format('ALTER ROLE %I WITH LOGIN PASSWORD %L', $1::text, $2::text)",
+                    role,
+                    password,
+                )
+                await conn.execute(stmt)
         return applied
     finally:
         await conn.close()

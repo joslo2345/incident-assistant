@@ -11,7 +11,7 @@ datasources:
     type: grafana-postgresql-datasource
     access: proxy
     url: timescaledb:5432
-    user: postgres
+    user: grafana_reader  # read-only role with a statement timeout (migration 004)
     jsonData:
       database: telemetry
       sslmode: disable

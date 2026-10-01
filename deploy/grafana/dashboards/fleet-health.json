@@ -88,7 +88,7 @@
           "rawQuery": true,
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT avg(util_avg) FROM gpu_metrics_1m WHERE $__timeFilter(bucket) AND node_id IN ($node)"
+          "rawSql": "SELECT avg(util_avg) FROM gpu_metrics_1m WHERE $__timeFilter(bucket) AND node_id IN (${node:sqlstring})"
         }
       ],
       "fieldConfig": {
@@ -139,7 +139,7 @@
           "rawQuery": true,
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT max(temp_max) FROM gpu_metrics_1m WHERE $__timeFilter(bucket) AND node_id IN ($node)"
+          "rawSql": "SELECT max(temp_max) FROM gpu_metrics_1m WHERE $__timeFilter(bucket) AND node_id IN (${node:sqlstring})"
         }
       ],
       "fieldConfig": {
@@ -198,7 +198,7 @@
           "rawQuery": true,
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT 100.0 * sum(throttled_samples) / nullif(sum(samples), 0) FROM gpu_metrics_1m WHERE $__timeFilter(bucket) AND node_id IN ($node)"
+          "rawSql": "SELECT 100.0 * sum(throttled_samples) / nullif(sum(samples), 0) FROM gpu_metrics_1m WHERE $__timeFilter(bucket) AND node_id IN (${node:sqlstring})"
         }
       ],
       "fieldConfig": {
@@ -257,7 +257,7 @@
           "rawQuery": true,
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT coalesce(sum(new_sbe), 0) FROM (SELECT bucket, node_id, gpu_index, gpu_model, greatest(ecc_sbe_total - lag(ecc_sbe_total) OVER w, 0) AS new_sbe, greatest(ecc_dbe_total - lag(ecc_dbe_total) OVER w, 0) AS new_dbe FROM gpu_metrics_1m WHERE $__timeFilter(bucket) AND node_id IN ($node) WINDOW w AS (PARTITION BY node_id, gpu_index ORDER BY bucket)) per_bucket"
+          "rawSql": "SELECT coalesce(sum(new_sbe), 0) FROM (SELECT bucket, node_id, gpu_index, gpu_model, greatest(ecc_sbe_total - lag(ecc_sbe_total) OVER w, 0) AS new_sbe, greatest(ecc_dbe_total - lag(ecc_dbe_total) OVER w, 0) AS new_dbe FROM gpu_metrics_1m WHERE $__timeFilter(bucket) AND node_id IN (${node:sqlstring}) WINDOW w AS (PARTITION BY node_id, gpu_index ORDER BY bucket)) per_bucket"
         }
       ],
       "fieldConfig": {
@@ -316,7 +316,7 @@
           "rawQuery": true,
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT (SELECT count(*) FROM bmc_log WHERE $__timeFilter(time) AND severity <> 'ok' AND node_id IN ($node)) + (SELECT count(*) FROM xid_events WHERE $__timeFilter(time) AND node_id IN ($node))"
+          "rawSql": "SELECT (SELECT count(*) FROM bmc_log WHERE $__timeFilter(time) AND severity <> 'ok' AND node_id IN (${node:sqlstring})) + (SELECT count(*) FROM xid_events WHERE $__timeFilter(time) AND node_id IN (${node:sqlstring}))"
         }
       ],
       "fieldConfig": {
@@ -375,7 +375,7 @@
           "rawQuery": true,
           "editorMode": "code",
           "format": "time_series",
-          "rawSql": "SELECT $__timeGroupAlias(bucket, $__interval), node_id AS metric, max(temp_max) AS value FROM gpu_metrics_1m WHERE $__timeFilter(bucket) AND node_id IN ($node) GROUP BY 1, 2 ORDER BY 1"
+          "rawSql": "SELECT $__timeGroupAlias(bucket, $__interval), node_id AS metric, max(temp_max) AS value FROM gpu_metrics_1m WHERE $__timeFilter(bucket) AND node_id IN (${node:sqlstring}) GROUP BY 1, 2 ORDER BY 1"
         }
       ],
       "fieldConfig": {
@@ -424,7 +424,7 @@
           "rawQuery": true,
           "editorMode": "code",
           "format": "time_series",
-          "rawSql": "SELECT time, node_id AS metric, sum(p) AS value FROM (SELECT $__timeGroupAlias(bucket, $__interval), node_id, gpu_index, avg(power_avg) AS p FROM gpu_metrics_1m WHERE $__timeFilter(bucket) AND node_id IN ($node) GROUP BY 1, 2, 3) per_gpu GROUP BY 1, 2 ORDER BY 1"
+          "rawSql": "SELECT time, node_id AS metric, sum(p) AS value FROM (SELECT $__timeGroupAlias(bucket, $__interval), node_id, gpu_index, avg(power_avg) AS p FROM gpu_metrics_1m WHERE $__timeFilter(bucket) AND node_id IN (${node:sqlstring}) GROUP BY 1, 2, 3) per_gpu GROUP BY 1, 2 ORDER BY 1"
         }
       ],
       "fieldConfig": {
@@ -473,7 +473,7 @@
           "rawQuery": true,
           "editorMode": "code",
           "format": "time_series",
-          "rawSql": "SELECT $__timeGroupAlias(bucket, $__interval), node_id AS metric, avg(util_avg) AS value FROM gpu_metrics_1m WHERE $__timeFilter(bucket) AND node_id IN ($node) GROUP BY 1, 2 ORDER BY 1"
+          "rawSql": "SELECT $__timeGroupAlias(bucket, $__interval), node_id AS metric, avg(util_avg) AS value FROM gpu_metrics_1m WHERE $__timeFilter(bucket) AND node_id IN (${node:sqlstring}) GROUP BY 1, 2 ORDER BY 1"
         }
       ],
       "fieldConfig": {
@@ -524,7 +524,7 @@
           "rawQuery": true,
           "editorMode": "code",
           "format": "time_series",
-          "rawSql": "SELECT $__timeGroupAlias(bucket, $__interval), 'GPU ' || gpu_index AS metric, max(temp_max) AS value FROM gpu_metrics_1m WHERE $__timeFilter(bucket) AND node_id = '$gpu_node' GROUP BY 1, 2 ORDER BY 1"
+          "rawSql": "SELECT $__timeGroupAlias(bucket, $__interval), 'GPU ' || gpu_index AS metric, max(temp_max) AS value FROM gpu_metrics_1m WHERE $__timeFilter(bucket) AND node_id = ${gpu_node:sqlstring} GROUP BY 1, 2 ORDER BY 1"
         }
       ],
       "fieldConfig": {
@@ -573,7 +573,7 @@
           "rawQuery": true,
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT node_id AS node, gpu_index AS gpu, last(gpu_model, bucket) AS model, sum(new_sbe) AS new_errors, sum(new_dbe) AS new_uncorrectable FROM (SELECT bucket, node_id, gpu_index, gpu_model, greatest(ecc_sbe_total - lag(ecc_sbe_total) OVER w, 0) AS new_sbe, greatest(ecc_dbe_total - lag(ecc_dbe_total) OVER w, 0) AS new_dbe FROM gpu_metrics_1m WHERE $__timeFilter(bucket) AND node_id IN ($node) WINDOW w AS (PARTITION BY node_id, gpu_index ORDER BY bucket)) per_bucket GROUP BY 1, 2 HAVING sum(new_sbe) > 0 OR sum(new_dbe) > 0 ORDER BY new_uncorrectable DESC, new_errors DESC LIMIT 20"
+          "rawSql": "SELECT node_id AS node, gpu_index AS gpu, last(gpu_model, bucket) AS model, sum(new_sbe) AS new_errors, sum(new_dbe) AS new_uncorrectable FROM (SELECT bucket, node_id, gpu_index, gpu_model, greatest(ecc_sbe_total - lag(ecc_sbe_total) OVER w, 0) AS new_sbe, greatest(ecc_dbe_total - lag(ecc_dbe_total) OVER w, 0) AS new_dbe FROM gpu_metrics_1m WHERE $__timeFilter(bucket) AND node_id IN (${node:sqlstring}) WINDOW w AS (PARTITION BY node_id, gpu_index ORDER BY bucket)) per_bucket GROUP BY 1, 2 HAVING sum(new_sbe) > 0 OR sum(new_dbe) > 0 ORDER BY new_uncorrectable DESC, new_errors DESC LIMIT 20"
         }
       ],
       "fieldConfig": {
@@ -608,7 +608,7 @@
           "rawQuery": true,
           "editorMode": "code",
           "format": "table",
-          "rawSql": "SELECT time, node_id AS node, NULL::smallint AS gpu, severity, entry_code AS code, message FROM bmc_log WHERE $__timeFilter(time) AND severity <> 'ok' AND node_id IN ($node) UNION ALL SELECT time, node_id, gpu_index, 'xid', xid_code::text, message FROM xid_events WHERE $__timeFilter(time) AND node_id IN ($node) ORDER BY time DESC LIMIT 50"
+          "rawSql": "SELECT time, node_id AS node, NULL::smallint AS gpu, severity, entry_code AS code, message FROM bmc_log WHERE $__timeFilter(time) AND severity <> 'ok' AND node_id IN (${node:sqlstring}) UNION ALL SELECT time, node_id, gpu_index, 'xid', xid_code::text, message FROM xid_events WHERE $__timeFilter(time) AND node_id IN (${node:sqlstring}) ORDER BY time DESC LIMIT 50"
         }
       ],
       "fieldConfig": {
