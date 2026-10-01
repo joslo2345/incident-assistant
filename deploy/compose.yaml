@@ -1,17 +1,140 @@
 # Local stack. Run with `make up` from the repo root.
-# Services are added package by package:
-#   A2: redpanda, timescaledb, prometheus, grafana
 #   A3: detector   A5: agent   A7: ui
 name: incident-assistant
 
 services:
+  redpanda:
+    image: redpandadata/redpanda:v26.2.3
+    command:
+      - redpanda
+      - start
+      - --mode=dev-container
+      - --smp=1
+      - --memory=1G
+      - --kafka-addr=internal://0.0.0.0:9092,external://0.0.0.0:19092
+      - --advertise-kafka-addr=internal://redpanda:9092,external://localhost:19092
+      - --rpc-addr=redpanda:33145
+      - --advertise-rpc-addr=redpanda:33145
+    ports:
+      - "19092:19092"   # Kafka API for tools on the host
+      - "9644:9644"     # admin API + metrics
+    volumes:
+      - redpanda-data:/var/lib/redpanda/data
+    healthcheck:
+      test: ["CMD-SHELL", "rpk cluster health | grep -qE 'Healthy:\\s+true'"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  topics:
+    image: redpandadata/redpanda:v26.2.3
+    depends_on:
+      redpanda: { condition: service_healthy }
+    entrypoint: ["/bin/bash", "-c"]
+    # 8 partitions keyed by node_id; the DLQ keeps bad events for 30 days.
+    command:
+      - >-
+        rpk -X brokers=redpanda:9092 topic describe telemetry.raw >/dev/null 2>&1 ||
+        rpk -X brokers=redpanda:9092 topic create telemetry.raw -p 8 -r 1 -c retention.ms=604800000;
+        rpk -X brokers=redpanda:9092 topic describe telemetry.dlq >/dev/null 2>&1 ||
+        rpk -X brokers=redpanda:9092 topic create telemetry.dlq -p 1 -r 1 -c retention.ms=2592000000;
+        rpk -X brokers=redpanda:9092 topic list
+
+  timescaledb:
+    image: timescale/timescaledb:2.30.2-pg17
+    environment:
+      POSTGRES_DB: telemetry
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+    ports:
+      - "5432:5432"
+    volumes:
+      - timescale-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d telemetry"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  migrate:
+    build: &consumer-build
+      context: ..
+      dockerfile: deploy/docker/python-service.Dockerfile
+      args: { SERVICE_DIR: services/consumer, PACKAGE: incident-consumer }
+    image: incident-assistant/consumer:dev
+    command: ["python", "-m", "consumer.migrate"]
+    environment:
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgres}@timescaledb:5432/telemetry
+    depends_on:
+      timescaledb: { condition: service_healthy }
+
   ingest:
     build:
       context: ..
-      dockerfile: services/ingest/Dockerfile
+      dockerfile: deploy/docker/python-service.Dockerfile
+      args: { SERVICE_DIR: services/ingest, PACKAGE: incident-ingest }
     image: incident-assistant/ingest:dev
+    command: ["uvicorn", "ingest.app:app", "--host", "0.0.0.0", "--port", "8000"]
     ports:
       - "8000:8000"
     environment:
       INGEST_API_KEYS: ${INGEST_API_KEYS:-dev-key}
+      KAFKA_BOOTSTRAP: redpanda:9092
+    depends_on:
+      topics: { condition: service_completed_successfully }
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz')"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
     restart: unless-stopped
+
+  consumer:
+    build: *consumer-build
+    image: incident-assistant/consumer:dev
+    command: ["python", "-m", "consumer.main"]
+    environment:
+      KAFKA_BOOTSTRAP: redpanda:9092
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgres}@timescaledb:5432/telemetry
+    depends_on:
+      topics: { condition: service_completed_successfully }
+      migrate: { condition: service_completed_successfully }
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:9101/metrics')"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:v3.15.0
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.retention.time=7d
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:13.2.3
+    ports:
+      - "3000:3000"
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/fleet-health.json
+      TSDB_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      - prometheus
+      - timescaledb
+    restart: unless-stopped
+
+volumes:
+  redpanda-data:
+  timescale-data:

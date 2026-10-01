@@ -665,6 +665,7 @@
     },
     "/v1/telemetry": {
       "post": {
+        "description": "202 means every new event is durably stored in the stream.",
         "operationId": "ingest_telemetry_v1_telemetry_post",
         "requestBody": {
           "content": {
@@ -716,6 +717,16 @@
               }
             },
             "description": "Overloaded; retry after the number of seconds in Retry-After"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Stream unavailable; retry after the number of seconds in Retry-After"
           }
         },
         "security": [

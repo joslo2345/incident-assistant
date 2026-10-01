@@ -24,7 +24,6 @@ def test_ten_minute_replay_end_to_end(sim: FleetSimulator) -> None:
                 transport=transport, base_url="http://ingest", headers={API_KEY_HEADER: KEY}
             ) as client:
                 stats = await replay(sim, client, duration_s=600, speed=0, batch_size=500)
-            await asyncio.sleep(0.05)  # let the sink drain
             return stats
 
     stats = asyncio.run(scenario())
@@ -33,7 +32,7 @@ def test_ten_minute_replay_end_to_end(sim: FleetSimulator) -> None:
     assert stats.accepted == stats.events_sent
     assert stats.duplicates == 0
     assert stats.retries_429 == stats.retries_error == 0
-    assert app.state.sink.published == stats.accepted
+    assert len(app.state.publisher.events) == stats.accepted
 
 
 def scripted_client(

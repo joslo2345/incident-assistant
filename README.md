@@ -3,7 +3,7 @@
 Replays GPU cluster telemetry, detects hardware anomalies, and has an agent investigate each
 incident and return a cited diagnosis and suggested fix.
 
-> Work in progress: A1 (telemetry replay and ingestion) is done; next is A2 (Kafka, TimescaleDB, Grafana).
+> Work in progress: A2 (streaming, storage, observability) is done; next is A3 (anomaly detection).
 
 ## Contracts
 
@@ -31,6 +31,22 @@ INGEST_API_KEYS=dev-key uv run uvicorn ingest.app:app --reload   # docs at http:
 The JSON Schemas and OpenAPI spec in `docs/schemas/` are generated from code. A test fails if
 they're out of date.
 
+## Local stack
+
+`make up` starts everything with Docker Compose (`deploy/compose.yaml`):
+
+| Service | URL | What it is |
+| --- | --- | --- |
+| Ingest API | http://localhost:8000/docs | `POST /v1/telemetry`, key `dev-key` |
+| Grafana | http://localhost:3000 | Fleet health and System health dashboards (anonymous view; admin/admin) |
+| Prometheus | http://localhost:9090 | metrics from ingest, consumer, Redpanda |
+| TimescaleDB | localhost:5432 | db `telemetry`, user/password `postgres` |
+| Redpanda | localhost:19092 | Kafka API; topics `telemetry.raw` (8 partitions), `telemetry.dlq` |
+
+Data flow: ingest → `telemetry.raw` → consumer → TimescaleDB (`gpu_metrics`, `xid_events`, `bmc_log`,
+rollups `gpu_metrics_1m` / `gpu_metrics_1h`). `make test-integration` kills the consumer mid-replay,
+forces redelivery and sends a bad message, then checks that nothing was lost or duplicated.
+
 ## Telemetry replayer
 
 `replayer/` turns a day of real GPU-cluster load ([Alibaba cluster-trace-gpu-v2020](https://github.com/alibaba/clusterdata/tree/master/cluster-trace-gpu-v2020),
@@ -40,7 +56,7 @@ CC BY 4.0) into DCGM-style metrics and Redfish BMC entries for a simulated fleet
 ```sh
 make up
 uv run replay --duration 10m --speed 10          # 10 simulated minutes in 1 minute
-uv run replay --duration 3d --speed 0            # as fast as possible (throughput test)
+uv run replay --duration 3d --speed 0 --start now-3d   # backfill 3 days as fast as possible
 ```
 
 The workload slice is committed in `replayer/data/`. To rebuild it from the raw trace (~1 GB download):
