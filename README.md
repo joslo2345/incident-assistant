@@ -45,6 +45,7 @@ random local secrets in `deploy/.env` (gitignored). All ports are bound to local
 | Prometheus | http://localhost:9090 | metrics from ingest, consumer, Redpanda |
 | TimescaleDB | localhost:5432 | db `telemetry`; roles `postgres` (migrations), `telemetry_writer`, `grafana_reader`; passwords in `deploy/.env` |
 | Knowledge API | http://localhost:8001/docs | `/v1/search`, `/v1/ask`, `/v1/chunks/{id}`; key `KNOWLEDGE_API_KEY` in `deploy/.env` |
+| Agent API | http://localhost:8002/docs | investigate, runs and traces, approvals; keys `AGENT_API_KEY` and `APPROVER_API_KEY` in `deploy/.env` |
 | Redpanda | localhost:19092 | Kafka API; topics `telemetry.raw` (8 partitions), `telemetry.dlq` |
 
 Data flow: ingest → `telemetry.raw` → consumer → TimescaleDB (`gpu_metrics`, `xid_events`, `bmc_log`,
@@ -80,6 +81,33 @@ curl -s localhost:8001/v1/ask -H "X-API-Key: $KNOWLEDGE_API_KEY" -H 'content-typ
 
 Answers use Claude when `ANTHROPIC_API_KEY` is set in `deploy/.env`; otherwise they're extractive
 (the best cited passage).
+
+## Investigation agent
+
+`services/agent` investigates an incident the way an on-call engineer would: it reads the GPU
+metrics and the XID/BMC logs around the incident, searches the runbooks, and submits a structured
+diagnosis (root cause, confidence, evidence, citations, recommended action). Citations must be
+chunks a tool returned during the run. A drain or GPU reset is never performed: it becomes a
+pending approval request that a person decides with a separate key. Every model and tool call is
+traced in Postgres with tokens and latency.
+
+The model is open source and runs locally: Qwen3 30B-A3B through [Ollama](https://ollama.com)
+(about 18 GB; 32 GB of RAM or more recommended). Any OpenAI-compatible server works, and
+`AGENT_PROVIDER=anthropic` switches to Claude.
+
+```sh
+brew install ollama && brew services start ollama
+make model                    # pulls the model and builds qwen3-agent (32k context)
+make up                       # the agent investigates new live incidents automatically
+uv run python scripts/agent_env.py uv run agent investigate <incident-id>
+uv run python scripts/agent_env.py uv run agent approvals --status pending
+curl -s -X POST localhost:8002/v1/approvals/<request-id>/decision -H "X-API-Key: $APPROVER_API_KEY" \
+  -H 'content-type: application/json' -d '{"decision": "approve", "decided_by": "alice"}'
+```
+
+The same tools are an MCP server (`make mcp`, stdio). To try them in the MCP Inspector:
+`npx @modelcontextprotocol/inspector uv run python scripts/agent_env.py uv run agent mcp`
+(from the repo root). Seven tools; all read-only except `drain_node`, which only files a request.
 
 ## Telemetry replayer
 

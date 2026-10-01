@@ -17,6 +17,10 @@ SECRETS = (
     "DETECTOR_DB_PASSWORD",  # incident_detector role
     "KNOWLEDGE_DB_PASSWORD",  # knowledge_service role
     "KNOWLEDGE_API_KEY",  # clients of the knowledge API (the agent in A5)
+    "AGENT_DB_PASSWORD",  # incident_agent role
+    "APPROVAL_DB_PASSWORD",  # approval_service role (decides approval requests)
+    "AGENT_API_KEY",  # clients of the agent API
+    "APPROVER_API_KEY",  # people approving drains/resets; never given to the agent
 )
 
 

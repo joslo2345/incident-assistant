@@ -84,3 +84,39 @@ Full report: [eval/reports/retrieval.md](../eval/reports/retrieval.md). 150 chun
 | Search latency p50 | 9 ms hybrid, 235 ms with rerank | CPU, local models |
 | Ingestion | 150 chunks embedded in 4.1 s; re-run embeds 0 | content-hash incremental sync |
 | Retrieval cost per query | $0 | local ONNX models (fastembed) |
+
+## A5 · Investigation agent
+
+Full report: [eval/reports/agent-baseline.md](../eval/reports/agent-baseline.md). Every actionable
+incident of detector run `ev3-v3-residual` (26, all matched to an injected fault, 13 with BMC logs
+dropped), investigated once each by Qwen3 30B-A3B running locally (Ollama, Apple M3 Pro, 36 GB).
+This is a baseline; A6 builds the full eval and the improvement rounds.
+
+| Metric | Value | How measured |
+| --- | --- | --- |
+| Runs ending in a valid, cited diagnosis | **26/26** | status `succeeded`; every citation is a chunk a tool returned in that run |
+| **Root-cause accuracy** | **18/26 (69%)** | agent's `root_cause` vs injected fault type |
+| Root-cause accuracy, BMC logs dropped | 6/13 | same, on the faults with no BMC entries |
+| Detector rule classification, same incidents | 26/26 | the bar the agent has to reach |
+| Cites the runbook for the true failure type | 17/26 | cited `doc_id` is that type's runbook |
+| Latency per investigation | p50 **126 s**, p95 187 s | wall clock; tool calls take ms, the model takes 20–50 s per turn |
+| Model calls / tool calls per run | 4.3 / 3.3 | means |
+| Tokens per investigation | 22.8k (input + output, all calls) | ~65% of output is the model's reasoning |
+| **Cost** | **$0** | self-hosted; electricity aside |
+| Tool calls recovered from text | 10 | model wrote the call as text (see DECISIONS) |
+| Invalid tool arguments, corrected by the model | 12 | e.g. `search_runbooks` without `query`; all retried successfully |
+| End-to-end on a fresh injected fault | correct, cited, drain filed as pending | `tests/integration/test_agent.py` |
+| Approvals: agent cannot decide, self-approve, or edit a request | enforced by DB roles and trigger | integration test |
+
+**What went wrong, and why (input for A6 round 1):** 7 of the 8 misses are faults labelled
+`noisy_neighbor` (5 thermal or power faults with BMC logs dropped, 1 power fault, 1 PCIe), each with
+"none" or "monitor" as the action, so these are missed faults, not false alarms. The traces show the
+model *saw* the signals (power limit cut from 400 W to 240 W; a +17 °C thermal residual at 88.5 °C;
+PCIe replay spikes) and dismissed them, citing the prompt rule "without hardware errors … that is
+noisy_neighbor". The prompt never says that an enforced power-limit drop or a large thermal residual
+is itself a fault signal. Fixing the prompt is the first measured change in A6, against this
+baseline.
+
+**Run-to-run variance:** the same incident (`ev3-h100-node-05` thermal) was diagnosed correctly in
+one batch and as `noisy_neighbor` in the next, at temperature 0.2. Single runs are noisy; A6 should
+repeat each incident and report spread.

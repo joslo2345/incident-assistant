@@ -17,8 +17,10 @@ policies, image signing) is work package **A8**.
 | Area | Control |
 | --- | --- |
 | Knowledge API | Random API key from `deploy/.env`; answers only from retrieved sources, with citations validated server-side; the Claude key (optional) stays in `deploy/.env` |
+| Agent API | Two key sets: agent keys (investigate, read traces) and approver keys (decide). An agent key can't decide |
+| Agent | Seven tools, all read-only except `drain_node`, which only files a request; tool allowlist per run; arguments validated before any query; results size-capped; step, token and time budgets. The model runs locally (Ollama, 127.0.0.1 only), so incident data never leaves the machine |
 | Ingest API | API key (constant-time compare, fails closed with no keys); 10 MB body limit checked before parsing (also for chunked uploads); schema validation with unknown fields rejected; bounded in-flight events (429); errors don't expose internal details |
-| Database | Services use least-privilege roles: `telemetry_writer` (SELECT/INSERT on telemetry tables), `grafana_reader` (SELECT only, read-only transactions, 30 s statement timeout), `incident_detector` (SELECT on telemetry, read/write on `incidents` only), `knowledge_service` (read/write on `kb_chunks` only). The superuser is used only by migrations. Role passwords come from the environment, never from SQL files. |
+| Database | Services use least-privilege roles: `telemetry_writer` (SELECT/INSERT on telemetry tables), `grafana_reader` (SELECT only, read-only transactions, 30 s statement timeout), `incident_detector` (SELECT on telemetry, read/write on `incidents` only), `knowledge_service` (read/write on `kb_chunks` only), `incident_agent` (SELECT on telemetry and incidents, writes its own traces, INSERT-only on `approval_requests`), `approval_service` (UPDATE of the decision columns of `approval_requests` only). A trigger makes decisions final and rejects self-approval. The superuser is used only by migrations. Role passwords come from the environment, never from SQL files. |
 | Grafana | Anonymous access off (it would let anyone send raw SQL to the datasource); random admin password; sign-up disabled; template variables in SQL always use `${var:sqlstring}` escaping |
 | Containers | Non-root user; base images pinned by digest; Debian security updates applied at build time |
 | Supply chain | `uv.lock` pins every dependency; GitHub Actions pinned to commit SHAs; Dependabot for Python, Actions, Docker; the trace download is checksum-verified |
@@ -42,7 +44,20 @@ bandit, plus a manual review of configuration and code paths.
 | 503 responses included broker error text | Low | Fixed: generic message, details logged |
 | No secrets in git history or tree; no vulnerable Python dependencies | n/a | Verified clean |
 
+**2026-10-01, A5 (agent).** pip-audit clean; Trivy finds 0 fixable HIGH/CRITICAL in the agent
+image. Design review of the agent's permissions:
+
+| Risk | Mitigation |
+| --- | --- |
+| Prompt injection through tool results (BMC messages, runbook text) steering the model | The model has no way to act: its only write is a pending request, decided by a person with a different key and database role |
+| Model approving its own request | `incident_agent` has no UPDATE on requests; trigger rejects deciders named `agent*` or equal to the requester (integration test) |
+| Model citing sources it never saw | Citations are checked against chunks returned in the same run; rejected otherwise |
+| Runaway loops or huge tool output | Step, token, per-call and per-run time budgets; results capped at 12k characters |
+
 **Accepted for now (local-only stack, addressed in A8):**
+- The agent container holds the `approval_service` password for its decision endpoint; the agent
+  loop never uses it. Splitting approvals into their own service fits A7 (UI) or A8.
+- The MCP server runs over stdio for local clients only; it has no authentication of its own.
 - Kafka, the Redpanda admin API and Prometheus have no authentication (localhost-only).
 - `/metrics` on ingest is unauthenticated (localhost-only; NetworkPolicy in A8).
 - 44 HIGH base-image CVEs with no Debian fix yet (util-linux and login tools). The services never

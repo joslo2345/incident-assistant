@@ -1,0 +1,1 @@
+"""Investigation agent (A5)."""
