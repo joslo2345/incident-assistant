@@ -137,6 +137,20 @@ def fleet_health() -> dict[str, Any]:
     node_filter = "node_id IN (${node:sqlstring})"
     panels = [
         lay.place(
+            table(
+                "Incidents (live detector)",
+                sql(
+                    "SELECT opened_at AS opened, status, severity, suspected_failure_type AS type, "
+                    "node_id AS node, array_to_string(gpu_indices, ',') AS gpus, title "
+                    "FROM incidents WHERE detector_run = 'live' AND $__timeFilter(opened_at) "
+                    f"AND {node_filter} ORDER BY opened_at DESC LIMIT 50",
+                    "table",
+                ),
+            ),
+            24,
+            7,
+        ),
+        lay.place(
             stat(
                 "GPUs reporting (last 5 min)",
                 sql(

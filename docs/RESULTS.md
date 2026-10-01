@@ -52,3 +52,20 @@ Takeaways: at a realistic fleet rate, data is queryable about 25 ms after the AP
 maximum load the p99 tail (268 ms) comes from consumer batching (up to 5000 messages or 500 ms);
 smaller batches would cut it at some throughput cost. Durability halved peak ingest throughput, which
 still leaves about 50x headroom over the 100x replay rate.
+
+## A3 · Anomaly detection
+
+Full report: [eval/reports/detection.md](../eval/reports/detection.md). Three 48 h replays, 72
+injected faults plus 12 noisy-neighbor decoys, half with their BMC logs dropped; one run was held out.
+
+| Metric | Value | How measured |
+| --- | --- | --- |
+| Recall (final detector) | **99%** (71/72) | faults with a matching alarm, pooled over 3 runs |
+| Precision | **100%** (73 alarms, 0 false) | alarms matching a real fault |
+| Noisy-neighbor decoys raising an alarm | **0/12** | v3; naive z-scores flagged 8/12 |
+| Correct failure type | 71/71 | earliest matching alarm's type |
+| Time to detect, median | 0.1 min (off bus) to 4.9 min (thermal); ECC 77 min | ECC ramps over hours and is caught ~1 h before the DBE |
+| Naive z-scores, precision | 21% (309 false alarms) | the "before" of the improvement |
+| Improvement from the thermal residual model | precision 21% → 100%, recall kept at 99% | v2 vs v3 on the same data |
+| Detector speed | 2,880 minutes of fleet data in ~2.5 s | backfill, 64 GPUs |
+| CI quality gate | recall ≥ 83%, precision ≥ 90%, 0 decoy alarms | 1-day replay per PR (28 s) |

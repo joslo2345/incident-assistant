@@ -17,7 +17,7 @@ policies, image signing) is work package **A8**.
 | Area | Control |
 | --- | --- |
 | Ingest API | API key (constant-time compare, fails closed with no keys); 10 MB body limit checked before parsing (also for chunked uploads); schema validation with unknown fields rejected; bounded in-flight events (429); errors don't expose internal details |
-| Database | Services use least-privilege roles: `telemetry_writer` (SELECT/INSERT on telemetry tables), `grafana_reader` (SELECT only, read-only transactions, 30 s statement timeout). The superuser is used only by migrations. Role passwords come from the environment, never from SQL files. |
+| Database | Services use least-privilege roles: `telemetry_writer` (SELECT/INSERT on telemetry tables), `grafana_reader` (SELECT only, read-only transactions, 30 s statement timeout), `incident_detector` (SELECT on telemetry, read/write on `incidents` only). The superuser is used only by migrations. Role passwords come from the environment, never from SQL files. |
 | Grafana | Anonymous access off (it would let anyone send raw SQL to the datasource); random admin password; sign-up disabled; template variables in SQL always use `${var:sqlstring}` escaping |
 | Containers | Non-root user; base images pinned by digest; Debian security updates applied at build time |
 | Supply chain | `uv.lock` pins every dependency; GitHub Actions pinned to commit SHAs; Dependabot for Python, Actions, Docker; the trace download is checksum-verified |
