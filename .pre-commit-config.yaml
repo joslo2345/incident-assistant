@@ -20,7 +20,7 @@ repos:
     hooks:
       - id: mypy
         name: mypy
-        entry: uv run mypy libs services scripts tests
+        entry: uv run mypy libs services replayer scripts tests
         language: system
         types: [python]
         pass_filenames: false
@@ -28,5 +28,5 @@ repos:
         name: generated schemas are current
         entry: uv run python scripts/export_schemas.py --check
         language: system
-        files: ^(libs|services)/.*\.py$
+        files: ^(libs|services|replayer)/.*\.py$
         pass_filenames: false

@@ -91,3 +91,46 @@ Running log of design choices: what was chosen, what was rejected, and why.
 - **GitHub Actions:** one check job plus a Docker build matrix over services. Permissions are
   read-only and the Docker build cache is stored in GitHub Actions. Rejected: pushing images to a
   registry now (no consumer until A8).
+
+## 2026-10-01 · A1 · Workload source: Alibaba GPU trace, busiest machines with job churn
+
+- **Chose:** Alibaba cluster-trace-gpu-v2020. A one-time `replay-prepare` step builds a 24 h
+  slice: the busiest trace day, then the 8 eight-GPU machines with the most jobs among those
+  averaging ≥40% utilization. Multi-GPU instances (util > 100%) are split across neighboring GPUs.
+  The 6.7 KB slice is committed (CC BY 4.0, attributed in its `.meta.json`), so nobody needs the
+  1 GB download.
+- **Rejected:** Microsoft Philly traces (less per-job GPU detail); ranking machines only by
+  GPU-seconds (it picked machines running one 8-GPU job all day: flat 94% utilization and
+  no dynamics to detect anomalies against).
+- **Known limit:** the trace has lifetime-average utilization per instance, not time series. Within a
+  job, variation is synthetic (AR(1) wander). Results in A3 must not be read as "real job dynamics".
+
+## 2026-10-01 · A1 · Telemetry synthesis
+
+- **Mixed fleet (5 H100 SXM, 3 A100 SXM)** in `replayer/fleet.toml`. The trace's 2020 V100 load
+  is mapped onto modern GPU profiles; the load pattern is real, the hardware numbers are profiles.
+- **Physically consistent model** so faults in A3 have realistic signatures: power follows
+  utilization and caps at the limit (setting the throttle flag), temperature follows power with a
+  90 s lag, clocks drop when power-capped, and ECC counters are cumulative with rare correctable errors.
+- **Benign BMC noise:** about one inlet-temperature warning per node per day, which asserts
+  and then clears. These give A3 something that looks alarming but isn't a fault.
+- **Seeded** for reproducible values; event IDs are random (uuid4) so separate runs never collide in dedupe.
+
+## 2026-10-01 · A1 · Contract change: optional `gpu_model` on `gpu_metrics`
+
+- Needed for a mixed fleet: baselines (power limit, normal temperature) differ by model, and the
+  detector shouldn't need a separate inventory lookup to know that. It's optional and additive,
+  so existing clients aren't broken. It uses DCGM's `modelName` values.
+
+## 2026-10-01 · A1 · Ingest idempotency and backpressure
+
+- **Dedupe across batches:** an in-process cache of recent event IDs (10 min TTL, 1M max).
+  It's best-effort: it doesn't survive restarts or span replicas. The real guarantee is idempotent
+  inserts on `event_id` in A2. Rejected: Redis now (another service only to get a guarantee
+  the database gives us for free).
+- **Backpressure:** accepted events go into a bounded buffer (50k events) behind a sink interface.
+  If a batch doesn't fit, it gets 429 with `Retry-After`, and **its IDs aren't remembered**, so the
+  retry isn't mistaken for a duplicate. A batch made only of duplicates is never throttled.
+  In A2 the sink becomes a Kafka producer.
+- **Replayer retries** 429 (honoring Retry-After), 5xx and network errors with exponential
+  backoff and full jitter, always resending the identical batch. It doesn't retry 401/422.
