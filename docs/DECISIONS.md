@@ -271,3 +271,51 @@ Running log of design choices: what was chosen, what was rejected, and why.
   instead of failing the request.
 - **Bug found by tests:** chunk IDs contain `#`, which starts a URL fragment, so citation links
   silently truncated. URLs are now percent-encoded.
+
+## 2026-10-01 · A5 · Investigation agent and MCP tools
+
+- **Open-source model, run locally:** Qwen3 30B-A3B (mixture of experts, ~3B active parameters per
+  token) through Ollama on the host, behind an OpenAI-compatible provider. No per-token bill and no
+  data leaves the machine; the same provider class talks to vLLM in B5. Rejected for now: a hosted
+  API as the default (cost per investigation, and the results would measure a vendor's model, not
+  the system). Claude stays available behind `AGENT_PROVIDER=anthropic`.
+- **Ollama on the host, not in Compose:** Docker on macOS has no GPU access, so a containerized
+  model would run on CPU. The agent container reaches it at `host.docker.internal`; Ollama listens
+  on 127.0.0.1 only.
+- **Context pinned to 32k** (`deploy/ollama/Modelfile`): past Ollama's default context, input is
+  dropped silently, which would hide tool results from the model. The loop also wraps up when one
+  call's prompt passes 26k tokens.
+- **One tool registry, served twice:** the agent loop calls tools in-process; `agent mcp` serves the
+  same Pydantic schemas and validation over MCP (low-level `Server`, so the schemas are ours, with
+  read-only/destructive hints). Rejected: the loop as an MCP client of its own server (a subprocess
+  and a serialization hop per call, for no isolation gain on one machine).
+- **Flat tool schemas:** `$ref`s inlined and enums spelled out; small local models fill nested
+  references poorly.
+- **Diagnosis through a `submit_diagnosis` tool**, not provider JSON mode: tool calling is the one
+  structured-output path every provider has. Arguments are checked against the schema and the run:
+  evidence IDs must be on the incident, citations must be chunks a tool returned in this run, a
+  non-`unknown` cause needs at least one of each. Problems go back to the model; 2 retries.
+- **Tool calls written as text are recovered**, narrowly: Qwen3 under Ollama sometimes writes
+  `{"name": ..., "arguments": {...}}` into its message instead of the tool-call channel, and the
+  first batch run stalled on it (3 nudges, then `invalid_output`). A message that is *only* such
+  calls (bare, in `<tool_call>` tags, a JSON fence, or with one orphan tag left over after the
+  server consumed the other, which the second batch hit), naming tools offered on that turn, becomes
+  real calls; anything else stays text. Recovered calls get `text_` IDs, so the trace and the
+  report count them.
+- **Budgets:** 12 model calls, 200k tokens, 300 s per model call, 20 s per tool call, 20 min per
+  run. Near a limit the model is offered only `submit_diagnosis`. A tool failure or timeout becomes
+  an error result, not a failed run.
+- **Approvals enforced by the database, not by prompts:** `drain_node` and any drain/reset
+  recommendation only insert a pending row. `incident_agent` can INSERT requests but not UPDATE
+  them; `approval_service` can UPDATE only the decision columns and can't INSERT. A trigger makes
+  a decision final, keeps the request immutable, and rejects a decider named `agent*` or equal to
+  the requester. The API needs a separate approver key to decide.
+- **Diagnosis stored on the run (`agent_runs.diagnosis`), not in `incidents.record`:** the detector
+  owns incident rows and rewrites them on every update, which would drop an agent-written field.
+- **Traces in Postgres:** `agent_runs` + `agent_steps`, one row per model or tool call with
+  input, output, tokens and latency, written as they happen (a crashed run still leaves its trace).
+  A6 scores from these tables. Reasoning text is kept in the trace and never sent back to the model.
+- **Cost from a price table:** USD per million tokens per provider; zero for the local model, so
+  `cost_usd` is 0 by construction and tokens and latency are the numbers to watch.
+- **Watcher investigates new live incidents** (sev1–3, once each), one at a time: a local model
+  serves one request at a time anyway.

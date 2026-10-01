@@ -13,6 +13,10 @@ from typing import Any
 
 from pydantic import BaseModel
 
+from agent.app import create_app as create_agent_app
+from agent.diagnosis import SUBMIT_SPEC
+from agent.runtime import Settings as AgentSettings
+from agent.tools import TOOLS
 from incident_contracts import Incident, TelemetryBatch
 from ingest.app import app as ingest_app
 from knowledge.app import Settings as KnowledgeSettings
@@ -35,6 +39,25 @@ OUTPUTS: dict[str, Callable[[], str]] = {
     "ingest.openapi.json": lambda: _dump(ingest_app.openapi()),
     # No lifespan runs for openapi(), so no models or database are needed here.
     "knowledge.openapi.json": lambda: _dump(create_knowledge_app(KnowledgeSettings()).openapi()),
+    "agent.openapi.json": lambda: _dump(create_agent_app(AgentSettings()).openapi()),
+    # The agent's tools as the model (and MCP clients) see them.
+    "agent_tools.json": lambda: _dump(
+        {
+            t.name: {
+                "description": t.description,
+                "read_only": t.read_only,
+                "parameters": t.spec.parameters,
+            }
+            for t in TOOLS.values()
+        }
+        | {
+            SUBMIT_SPEC.name: {
+                "description": SUBMIT_SPEC.description,
+                "read_only": True,
+                "parameters": SUBMIT_SPEC.parameters,
+            }
+        }
+    ),
 }
 
 
