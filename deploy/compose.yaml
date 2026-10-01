@@ -1,0 +1,17 @@
+# Local stack. Run with `make up` from the repo root.
+# Services are added package by package:
+#   A2: redpanda, timescaledb, prometheus, grafana
+#   A3: detector   A5: agent   A7: ui
+name: incident-assistant
+
+services:
+  ingest:
+    build:
+      context: ..
+      dockerfile: services/ingest/Dockerfile
+    image: incident-assistant/ingest:dev
+    ports:
+      - "8000:8000"
+    environment:
+      INGEST_API_KEYS: ${INGEST_API_KEYS:-dev-key}
+    restart: unless-stopped

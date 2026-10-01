@@ -1,0 +1,44 @@
+[project]
+name = "incident-assistant"
+version = "0.1.0"
+description = "AI incident assistant for GPU fleets"
+readme = "README.md"
+requires-python = ">=3.12,<3.13"
+dependencies = ["incident-contracts", "incident-ingest"]
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+    "ruff>=0.6",
+    "mypy>=1.11",
+    "httpx2>=2.13.1",
+]
+
+[tool.uv]
+package = false
+
+[tool.uv.workspace]
+members = ["libs/*", "services/ingest"]
+
+[tool.uv.sources]
+incident-contracts = { workspace = true }
+incident-ingest = { workspace = true }
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "N", "SIM", "RUF"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+plugins = ["pydantic.mypy"]
+
+[tool.pytest.ini_options]
+testpaths = ["libs", "services", "tests"]
+addopts = "--import-mode=importlib"
+
+[tool.ruff.lint.isort]
+known-first-party = ["incident_contracts", "ingest"]
