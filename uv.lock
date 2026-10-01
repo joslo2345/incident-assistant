@@ -7,6 +7,7 @@ members = [
     "incident-assistant",
     "incident-consumer",
     "incident-contracts",
+    "incident-detector",
     "incident-ingest",
     "incident-replayer",
 ]
@@ -257,6 +258,7 @@ source = { virtual = "." }
 dependencies = [
     { name = "incident-consumer" },
     { name = "incident-contracts" },
+    { name = "incident-detector" },
     { name = "incident-ingest" },
     { name = "incident-replayer", extra = ["prepare"] },
 ]
@@ -274,6 +276,7 @@ dev = [
 requires-dist = [
     { name = "incident-consumer", editable = "services/consumer" },
     { name = "incident-contracts", editable = "libs/contracts" },
+    { name = "incident-detector", editable = "services/detector" },
     { name = "incident-ingest", editable = "services/ingest" },
     { name = "incident-replayer", extras = ["prepare"], editable = "replayer" },
 ]
@@ -316,6 +319,23 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [{ name = "pydantic", specifier = ">=2.8" }]
+
+[[package]]
+name = "incident-detector"
+version = "0.1.0"
+source = { editable = "services/detector" }
+dependencies = [
+    { name = "asyncpg" },
+    { name = "incident-contracts" },
+    { name = "prometheus-client" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "asyncpg", specifier = ">=0.31" },
+    { name = "incident-contracts", editable = "libs/contracts" },
+    { name = "prometheus-client", specifier = ">=0.26" },
+]
 
 [[package]]
 name = "incident-ingest"
