@@ -3,7 +3,9 @@
 Replays GPU cluster telemetry, detects hardware anomalies, and has an agent investigate each
 incident and return a cited diagnosis and suggested fix.
 
-> Work in progress: A2 (streaming, storage, observability) is done; next is A3 (anomaly detection).
+> Work in progress: A3 (anomaly detection) is done; next is A4 (runbook knowledge base and RAG).
+>
+> **Detector, final version: 99% recall, 100% precision, 0/12 decoy alarms** over 72 injected faults ([report](eval/reports/detection.md)).
 
 ## Contracts
 
@@ -47,6 +49,18 @@ random local secrets in `deploy/.env` (gitignored). All ports are bound to local
 Data flow: ingest → `telemetry.raw` → consumer → TimescaleDB (`gpu_metrics`, `xid_events`, `bmc_log`,
 rollups `gpu_metrics_1m` / `gpu_metrics_1h`). `make test-integration` kills the consumer mid-replay,
 forces redelivery and sends a bad message, then checks that nothing was lost or duplicated.
+
+## Anomaly detection
+
+`services/detector` turns telemetry into incidents in three layers: static thresholds and XID/BMC
+event rules, per-GPU z-scores, and a thermal model that predicts each GPU's temperature from its
+power. The model separates "too hot for its load" (a cooling fault) from "busy" (a noisy neighbor).
+It runs live in the stack and writes `incidents` (the shared `Incident` contract) for the agent (A5).
+
+```sh
+uv run replay --duration 1d --speed 0 --start now-2d --run-id ev1 --faults 14 --bmc-dropout 0.5
+uv run python scripts/eval_detection.py --run-id ev4 --duration 2d --seed 37   # full evaluation
+```
 
 ## Telemetry replayer
 

@@ -50,7 +50,7 @@ flowchart LR
 | Redpanda | A2 | Durable buffer between ingestion and storage. Kafka-compatible, lighter locally | Ingest, consumer |
 | Consumer | A2 | Batches of up to 5000 messages: validate, send invalid ones to the DLQ, COPY + `ON CONFLICT DO NOTHING` into TimescaleDB, then commit offsets (at-least-once, idempotent) | Redpanda, TimescaleDB |
 | TimescaleDB | A2 | Raw telemetry plus 1-minute and 1-hour continuous aggregates, with retention policies | Consumer, detector, MCP tools |
-| Detector | A3 | Thresholds, per-GPU rolling z-scores and event matching (XID, critical BMC entries), then groups related alerts into one incident with evidence windows | TimescaleDB, Postgres |
+| Detector | A3 | Per-GPU minute features from raw telemetry; static thresholds and XID/BMC event rules, per-GPU z-scores, and a thermal residual model (temperature vs lag-filtered power); groups related alerts per node and component into classified incidents with evidence | TimescaleDB (`incidents`) |
 | Knowledge base | A4 | Runbooks, vendor docs and past incidents, chunked by heading, hybrid search (vector + keyword) plus reranking, in pgvector | Postgres |
 | Agent + MCP server | A5 | Plans and calls tools within step and token budgets, returns a schema-valid `Diagnosis`, and traces every run | All stores, LLM provider |
 | Eval harness | A6 | Replays labeled incidents through the system and scores root cause, citations, actions, cost and latency | Everything |

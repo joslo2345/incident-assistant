@@ -120,3 +120,13 @@ def test_parse_start() -> None:
     assert abs((parse_start("now") - parse_start("now-1h")).total_seconds() - 3600) < 2
     with pytest.raises(argparse.ArgumentTypeError, match="timezone"):
         parse_start("2026-10-01T00:00:00")
+
+
+def test_cli_defaults_parse_without_optional_flags() -> None:
+    from replayer.cli import build_parser
+
+    args = build_parser().parse_args([])
+    assert args.run_id is None and args.faults == 0
+    assert build_parser().parse_args(["--run-id", "ev1"]).run_id == "ev1"
+    with pytest.raises(SystemExit):
+        build_parser().parse_args(["--run-id", "Bad_ID"])

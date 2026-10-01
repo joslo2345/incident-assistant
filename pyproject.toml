@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "AI incident assistant for GPU fleets"
 readme = "README.md"
 requires-python = ">=3.12,<3.13"
-dependencies = ["incident-contracts", "incident-ingest", "incident-consumer", "incident-replayer[prepare]"]
+dependencies = ["incident-contracts", "incident-ingest", "incident-consumer", "incident-detector", "incident-replayer[prepare]"]
 
 [dependency-groups]
 dev = [
@@ -19,12 +19,13 @@ dev = [
 package = false
 
 [tool.uv.workspace]
-members = ["libs/*", "services/ingest", "services/consumer", "replayer"]
+members = ["libs/*", "services/ingest", "services/consumer", "services/detector", "replayer"]
 
 [tool.uv.sources]
 incident-contracts = { workspace = true }
 incident-ingest = { workspace = true }
 incident-consumer = { workspace = true }
+incident-detector = { workspace = true }
 incident-replayer = { workspace = true }
 
 [tool.ruff]
@@ -41,10 +42,12 @@ plugins = ["pydantic.mypy"]
 
 [tool.pytest.ini_options]
 testpaths = ["libs", "services", "replayer", "tests"]
+# Shared test helpers live in uniquely named modules on this path (test dirs aren't packages).
+pythonpath = ["services/detector/tests"]
 addopts = "--import-mode=importlib"
 
 [tool.ruff.lint.isort]
-known-first-party = ["incident_contracts", "ingest", "consumer", "replayer"]
+known-first-party = ["incident_contracts", "ingest", "consumer", "detector", "replayer"]
 
 [[tool.mypy.overrides]]
 module = ["aiokafka", "aiokafka.*"]

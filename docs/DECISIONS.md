@@ -201,3 +201,40 @@ Running log of design choices: what was chosen, what was rejected, and why.
   HIGH/CRITICAL fail the build). This moves part of A8 earlier because it was cheap and caught real issues.
 - Lesson for the case study: the convenient demo settings (anonymous dashboards, default passwords,
   `0.0.0.0` ports) combined into a remote-code-execution path that no single setting showed.
+
+## 2026-10-01 · A3 · Fault injection changes physics, not numbers
+
+- Faults change the simulator's inputs (cooling, enforced power cap, utilization, error-counter
+  rates, a GPU going silent) and emit the events real hardware would (XID 48/74/79, Redfish fan,
+  PSU and PCIe entries). Thermal throttling was added to the GPU model for this. Signatures then
+  follow from physics. For example, a dead fan only shows up in temperatures if the GPU is busy.
+- **BMC dropout (50% in evaluation):** without it every fault announced itself through a log entry
+  and the layer comparison was meaningless. Real BMC logs often come through a separate,
+  lossy pipeline. Driver XIDs are kept reliable.
+- Each evaluation run uses its own node-name prefix, so runs share the database without deletes.
+
+## 2026-10-01 · A3 · Three detector layers, measured separately
+
+- **Chose:** static thresholds and event rules → per-GPU EWMA z-scores → a thermal residual model.
+  Each is a config flag so its effect can be measured on identical data.
+- **Thermal residual model:** temp ≈ a_gpu + b_model × power, where power is filtered with the
+  ~90 s heatsink time constant (without that, every job end looks like overheating for three
+  minutes). The slope is fitted per GPU model across the fleet and the intercept per GPU. The model
+  only learns from healthy minutes, so a fault doesn't become the new normal.
+- **Rejected:** Isolation Forest / learned models for now. With labelled faults and clear
+  physics, an explainable model that technicians can check ("12 °C hotter than its power
+  explains") beats a black box, and it already reaches 100% precision. Revisit with real data.
+- **Rejected:** z-scores as an alarm source. They produced 309 false alarms in 3 runs; they're
+  only useful together with a model that explains workload.
+
+## 2026-10-01 · A3 · Incidents: grouping, classification, timing
+
+- Alerts group into one incident per (node, related component) within 20 min; an incident resolves
+  after 30 min of quiet. Classification is an ordered rule list over alert kinds (e.g. XID 79 or a
+  missing GPU → gpu_off_bus beats anything else). It's simple, explainable, and 71/71 correct.
+- `opened_at` = first actionable (sev1–3) alert, which is what time-to-detect measures. Metric
+  alerts are stamped at the end of their minute, when the data actually exists.
+- Incident IDs are deterministic (uuid5 of run, node, GPU, kind, time), so re-processing upserts
+  instead of duplicating. The live detector replays 3 h of history at startup without creating copies.
+- **Evaluation discipline:** two seeds for development, a third held out until the end. Three bugs
+  were found by the evaluation, not by unit tests (see eval/reports/detection.md).

@@ -1,7 +1,7 @@
 # Local stack. Run with `make up` from the repo root.
 # Every port is published on 127.0.0.1 only: nothing here has TLS or Kafka auth (that's A8),
 # so it must not be reachable from the network. Secrets come from deploy/.env (`make env`).
-#   A3: detector   A5: agent   A7: ui
+#   A5: agent   A7: ui
 name: incident-assistant
 
 services:
@@ -70,6 +70,7 @@ services:
       # The migrate step sets these roles' passwords; they're never stored in SQL files.
       CONSUMER_DB_PASSWORD: ${CONSUMER_DB_PASSWORD:?run `make env` first}
       GRAFANA_DB_PASSWORD: ${GRAFANA_DB_PASSWORD:?run `make env` first}
+      DETECTOR_DB_PASSWORD: ${DETECTOR_DB_PASSWORD:?run `make env` first}
     depends_on:
       timescaledb: { condition: service_healthy }
 
@@ -107,6 +108,25 @@ services:
       migrate: { condition: service_completed_successfully }
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:9101/metrics')"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  detector:
+    build:
+      context: ..
+      dockerfile: deploy/docker/python-service.Dockerfile
+      args: { SERVICE_DIR: services/detector, PACKAGE: incident-detector }
+    image: incident-assistant/detector:dev
+    command: ["detect", "live"]
+    environment:
+      # SELECT on telemetry, read/write on incidents only (migration 005).
+      DATABASE_URL: postgresql://incident_detector:${DETECTOR_DB_PASSWORD:?run `make env` first}@timescaledb:5432/telemetry
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:9102/metrics')"]
       interval: 5s
       timeout: 3s
       retries: 10

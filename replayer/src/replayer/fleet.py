@@ -18,6 +18,8 @@ class GpuProfile:
     # How quickly die temperature follows power (first-order time constant).
     thermal_tau_s: float
     memory_temp_offset_c: float
+    # Temperature at which the GPU starts thermal slowdown (clocks drop).
+    slowdown_temp_c: float
 
 
 PROFILES: dict[str, GpuProfile] = {
@@ -32,6 +34,7 @@ PROFILES: dict[str, GpuProfile] = {
         thermal_c_per_w=0.064,
         thermal_tau_s=90,
         memory_temp_offset_c=6,
+        slowdown_temp_c=87,
     ),
     # Full load (400 W) with a 24 C inlet settles around 66 C.
     "a100_sxm": GpuProfile(
@@ -44,6 +47,7 @@ PROFILES: dict[str, GpuProfile] = {
         thermal_c_per_w=0.105,
         thermal_tau_s=90,
         memory_temp_offset_c=5,
+        slowdown_temp_c=85,
     ),
 }
 
