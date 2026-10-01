@@ -15,6 +15,8 @@ from pydantic import BaseModel
 
 from incident_contracts import Incident, TelemetryBatch
 from ingest.app import app as ingest_app
+from knowledge.app import Settings as KnowledgeSettings
+from knowledge.app import create_app as create_knowledge_app
 
 OUT_DIR = Path(__file__).resolve().parent.parent / "docs" / "schemas"
 
@@ -31,6 +33,8 @@ OUTPUTS: dict[str, Callable[[], str]] = {
     "telemetry_batch.schema.json": _model(TelemetryBatch),
     "incident.schema.json": _model(Incident),
     "ingest.openapi.json": lambda: _dump(ingest_app.openapi()),
+    # No lifespan runs for openapi(), so no models or database are needed here.
+    "knowledge.openapi.json": lambda: _dump(create_knowledge_app(KnowledgeSettings()).openapi()),
 }
 
 

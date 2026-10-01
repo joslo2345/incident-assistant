@@ -51,7 +51,7 @@ flowchart LR
 | Consumer | A2 | Batches of up to 5000 messages: validate, send invalid ones to the DLQ, COPY + `ON CONFLICT DO NOTHING` into TimescaleDB, then commit offsets (at-least-once, idempotent) | Redpanda, TimescaleDB |
 | TimescaleDB | A2 | Raw telemetry plus 1-minute and 1-hour continuous aggregates, with retention policies | Consumer, detector, MCP tools |
 | Detector | A3 | Per-GPU minute features from raw telemetry; static thresholds and XID/BMC event rules, per-GPU z-scores, and a thermal residual model (temperature vs lag-filtered power); groups related alerts per node and component into classified incidents with evidence | TimescaleDB (`incidents`) |
-| Knowledge base | A4 | Runbooks, vendor docs and past incidents, chunked by heading, hybrid search (vector + keyword) plus reranking, in pgvector | Postgres |
+| Knowledge base | A4 | 22 runbooks + past incidents in pgvector (`kb_chunks`); hybrid search (embeddings + full-text, RRF) with a local cross-encoder reranker; `/v1/ask` returns grounded, cited answers or refuses | Postgres, Claude (optional) |
 | Agent + MCP server | A5 | Plans and calls tools within step and token budgets, returns a schema-valid `Diagnosis`, and traces every run | All stores, LLM provider |
 | Eval harness | A6 | Replays labeled incidents through the system and scores root cause, citations, actions, cost and latency | Everything |
 | Web UI + Slack bot | A7 | Incident list and detail, approvals with an audit log, follow-up chat, feedback | Postgres, agent |

@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "AI incident assistant for GPU fleets"
 readme = "README.md"
 requires-python = ">=3.12,<3.13"
-dependencies = ["incident-contracts", "incident-ingest", "incident-consumer", "incident-detector", "incident-replayer[prepare]"]
+dependencies = ["incident-contracts", "incident-ingest", "incident-consumer", "incident-detector", "incident-knowledge", "incident-replayer[prepare]"]
 
 [dependency-groups]
 dev = [
@@ -19,13 +19,14 @@ dev = [
 package = false
 
 [tool.uv.workspace]
-members = ["libs/*", "services/ingest", "services/consumer", "services/detector", "replayer"]
+members = ["libs/*", "services/ingest", "services/consumer", "services/detector", "services/knowledge", "replayer"]
 
 [tool.uv.sources]
 incident-contracts = { workspace = true }
 incident-ingest = { workspace = true }
 incident-consumer = { workspace = true }
 incident-detector = { workspace = true }
+incident-knowledge = { workspace = true }
 incident-replayer = { workspace = true }
 
 [tool.ruff]
@@ -43,16 +44,18 @@ plugins = ["pydantic.mypy"]
 [tool.pytest.ini_options]
 testpaths = ["libs", "services", "replayer", "tests"]
 # Shared test helpers live in uniquely named modules on this path (test dirs aren't packages).
-pythonpath = ["services/detector/tests"]
+pythonpath = ["services/detector/tests", "services/knowledge/tests"]
 addopts = "--import-mode=importlib"
 
 [tool.ruff.lint.isort]
-known-first-party = ["incident_contracts", "ingest", "consumer", "detector", "replayer"]
+known-first-party = ["incident_contracts", "ingest", "consumer", "detector", "knowledge", "replayer"]
 
 [[tool.mypy.overrides]]
-module = ["aiokafka", "aiokafka.*"]
+module = ["aiokafka", "aiokafka.*", "fastembed", "fastembed.*", "pgvector", "pgvector.*"]
 ignore_missing_imports = true
 
 [tool.ruff.lint.per-file-ignores]
 # Dashboard definitions: SQL/PromQL strings read better unbroken.
 "scripts/build_dashboards.py" = ["E501"]
+# Incident report templates: sentences read better unbroken.
+"scripts/generate_incident_reports.py" = ["E501"]

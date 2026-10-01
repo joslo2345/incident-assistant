@@ -71,6 +71,7 @@ services:
       CONSUMER_DB_PASSWORD: ${CONSUMER_DB_PASSWORD:?run `make env` first}
       GRAFANA_DB_PASSWORD: ${GRAFANA_DB_PASSWORD:?run `make env` first}
       DETECTOR_DB_PASSWORD: ${DETECTOR_DB_PASSWORD:?run `make env` first}
+      KNOWLEDGE_DB_PASSWORD: ${KNOWLEDGE_DB_PASSWORD:?run `make env` first}
     depends_on:
       timescaledb: { condition: service_healthy }
 
@@ -132,6 +133,46 @@ services:
       retries: 10
     restart: unless-stopped
 
+  knowledge:
+    build: &knowledge-build
+      context: ..
+      dockerfile: deploy/docker/python-service.Dockerfile
+      args: { SERVICE_DIR: services/knowledge, PACKAGE: incident-knowledge }
+    image: incident-assistant/knowledge:dev
+    command: ["uvicorn", "knowledge.app:app_factory", "--factory", "--host", "0.0.0.0", "--port", "8001"]
+    ports:
+      - "127.0.0.1:8001:8001"
+    environment: &knowledge-env
+      DATABASE_URL: postgresql://knowledge_service:${KNOWLEDGE_DB_PASSWORD:?run `make env` first}@timescaledb:5432/telemetry
+      KNOWLEDGE_API_KEYS: ${KNOWLEDGE_API_KEY:?run `make env` first}
+      FASTEMBED_CACHE_DIR: /models
+      HF_HOME: /models/hf  # the non-root user has no home directory
+      HF_HUB_DISABLE_TELEMETRY: "1"
+      # Set ANTHROPIC_API_KEY in deploy/.env to answer with Claude; without it, answers are
+      # extractive (the best cited passage).
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+    volumes:
+      - model-cache:/models
+    depends_on:
+      kb-ingest: { condition: service_completed_successfully }
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/healthz')"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+    restart: unless-stopped
+
+  kb-ingest:
+    build: *knowledge-build
+    image: incident-assistant/knowledge:dev
+    command: ["knowledge", "ingest", "--corpus", "/corpus"]
+    environment: *knowledge-env
+    volumes:
+      - model-cache:/models
+      - ../knowledge:/corpus:ro
+    depends_on:
+      migrate: { condition: service_completed_successfully }
+
   prometheus:
     image: prom/prometheus:v3.15.0
     command:
@@ -167,3 +208,4 @@ services:
 volumes:
   redpanda-data:
   timescale-data:
+  model-cache:

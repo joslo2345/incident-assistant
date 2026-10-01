@@ -69,3 +69,18 @@ injected faults plus 12 noisy-neighbor decoys, half with their BMC logs dropped;
 | Improvement from the thermal residual model | precision 21% → 100%, recall kept at 99% | v2 vs v3 on the same data |
 | Detector speed | 2,880 minutes of fleet data in ~2.5 s | backfill, 64 GPUs |
 | CI quality gate | recall ≥ 83%, precision ≥ 90%, 0 decoy alarms | 1-day replay per PR (28 s) |
+
+## A4 · Knowledge base and RAG
+
+Full report: [eval/reports/retrieval.md](../eval/reports/retrieval.md). 150 chunks (22 runbooks,
+64 past incidents); 30 answerable + 6 unanswerable questions.
+
+| Metric | Value | How measured |
+| --- | --- | --- |
+| Recall@5, vector only | 73% | correct chunk in top 5 |
+| Recall@5, hybrid (vector + keyword, RRF) | 83% | same |
+| **Recall@5, hybrid + rerank** | **100%** (hit@1 80%, MRR 0.87) | same |
+| Unanswerable questions refused | **6/6**, with 0/30 answerable refused | reranker relevance gate at −0.4 |
+| Search latency p50 | 9 ms hybrid, 235 ms with rerank | CPU, local models |
+| Ingestion | 150 chunks embedded in 4.1 s; re-run embeds 0 | content-hash incremental sync |
+| Retrieval cost per query | $0 | local ONNX models (fastembed) |

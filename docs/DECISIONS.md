@@ -238,3 +238,36 @@ Running log of design choices: what was chosen, what was rejected, and why.
   instead of duplicating. The live detector replays 3 h of history at startup without creating copies.
 - **Evaluation discipline:** two seeds for development, a third held out until the end. Three bugs
   were found by the evaluation, not by unit tests (see eval/reports/detection.md).
+
+## 2026-10-01 · A4 · Knowledge base: corpus, chunking, storage
+
+- **Corpus written for this project:** 22 runbooks, one per failure type plus procedures (drain,
+  reset, RMA, DCGM, BMC triage, severity...), and 64 seeded synthetic past incidents. Vendor docs are
+  linked, not copied, to stay clear of licensing questions.
+- **Chunking:** runbooks by `##` heading (each chunk starts "title > heading" so it reads on its own,
+  and citations point at the exact section); past incidents stay whole, because splitting them
+  separated "root cause" from the node and symptoms it belongs to. Chunk IDs are stable
+  (`doc#heading`), so citations and eval labels survive re-ingestion.
+- **pgvector in the existing TimescaleDB** (HNSW, cosine) plus a generated `tsvector` column.
+  Rejected: a separate vector database. One Postgres means one backup, one access-control model, and
+  joins with incidents later.
+- **Local models (fastembed / ONNX):** bge-small-en-v1.5 embeddings and an ms-marco MiniLM
+  cross-encoder. No PyTorch, no per-query cost, and nothing leaves the machine. Rejected for now:
+  hosted embedding/rerank APIs (cost and data egress for a corpus this small).
+
+## 2026-10-01 · A4 · Retrieval and grounded answers
+
+- **Hybrid with reciprocal rank fusion, then rerank:** measured 73% → 83% → 100% recall@5. RRF was
+  chosen over weighted score blending because it needs no calibration between score scales.
+- **Keyword query ORs the terms** (`websearch_to_tsquery` ANDs them, which returns nothing for most
+  natural questions); `ts_rank_cd` still rewards chunks matching more terms.
+- **Refusal in two layers:** a relevance gate on the reranker score (no model call when retrieval is
+  weak), and post-hoc citation validation (citations must point at provided chunks; an answer with no
+  supported claim becomes "not enough information"). The model can't cite what it wasn't shown.
+- **Answers with Claude** (`claude-opus-5-5`, effort `medium`, JSON-schema structured output, cached
+  system prompt, server-side refusal fallback, 60 s timeout with SDK retries). Without an API key the
+  service answers **extractively** (the best passage, cited, labelled `provider: extractive`), so the
+  API works today and switches to Claude when a key is added. Model failures degrade to extractive
+  instead of failing the request.
+- **Bug found by tests:** chunk IDs contain `#`, which starts a URL fragment, so citation links
+  silently truncated. URLs are now percent-encoded.
