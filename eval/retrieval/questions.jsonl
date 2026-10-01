@@ -1,0 +1,36 @@
+{"id": "q01", "question": "What does XID 79 mean and what should I do?", "gold": ["rb-004-gpu-off-bus#remediation", "rb-004-gpu-off-bus#symptoms", "rb-008-xid-reference#interconnect-and-bus"]}
+{"id": "q02", "question": "Is XID 13 a hardware problem?", "gold": ["rb-008-xid-reference#application-caused-usually-not-hardware"]}
+{"id": "q03", "question": "XID 48 on a GPU, the job crashed. Next steps?", "gold": ["rb-002-ecc-degradation#remediation", "rb-008-xid-reference#memory-ecc"]}
+{"id": "q04", "question": "What's the difference between XID 94 and XID 95?", "gold": ["rb-008-xid-reference#memory-ecc"]}
+{"id": "q05", "question": "GPUs 0-3 are throttling and a fan reads 0 RPM. How do I fix it?", "gold": ["rb-001-thermal-runaway#remediation", "rb-001-thermal-runaway#diagnosis", "rb-001-thermal-runaway#symptoms"]}
+{"id": "q06", "question": "How do I tell if only one GPU is hot because of its heatsink rather than a fan?", "gold": ["rb-001-thermal-runaway#diagnosis", "rb-001-thermal-runaway#likely-causes"]}
+{"id": "q07", "question": "Correctable ECC errors are climbing on one GPU. Should I worry?", "gold": ["rb-002-ecc-degradation#why-it-matters", "rb-002-ecc-degradation#symptoms", "rb-002-ecc-degradation#remediation"]}
+{"id": "q08", "question": "How do I check pending row remaps on an H100?", "gold": ["rb-021-hbm-row-remapping#reading-the-state", "rb-002-ecc-degradation#diagnosis"]}
+{"id": "q09", "question": "When do we RMA a GPU for memory errors?", "gold": ["rb-011-rma-process#when-to-rma-a-gpu", "rb-021-hbm-row-remapping#decision-table"]}
+{"id": "q10", "question": "All GPUs on a node suddenly show a 420 W power limit. Why?", "gold": ["rb-003-power-fault#symptoms", "rb-003-power-fault#likely-causes"]}
+{"id": "q11", "question": "The enforced power limit is still low after the PSU was replaced.", "gold": ["rb-003-power-fault#remediation", "rb-015-power-capping-policy#rules"]}
+{"id": "q12", "question": "How do I set or restore a GPU power limit?", "gold": ["rb-015-power-capping-policy#checking-and-changing-limits"]}
+{"id": "q13", "question": "NVLink CRC errors are rising between two GPUs and all-reduce got slower.", "gold": ["rb-005-nvlink-degradation#symptoms", "rb-005-nvlink-degradation#diagnosis", "rb-005-nvlink-degradation#remediation"]}
+{"id": "q14", "question": "Can I reset a single GPU on an HGX system with NVSwitch?", "gold": ["rb-010-gpu-reset#preconditions", "rb-005-nvlink-degradation#remediation"]}
+{"id": "q15", "question": "PCIe replay counter keeps going up on one GPU. What do I check?", "gold": ["rb-006-pcie-degradation#diagnosis", "rb-006-pcie-degradation#symptoms"]}
+{"id": "q16", "question": "How do I see if a GPU's PCIe link trained at the wrong width?", "gold": ["rb-006-pcie-degradation#diagnosis"]}
+{"id": "q17", "question": "How do I drain a node in Slurm?", "gold": ["rb-009-node-drain#slurm"]}
+{"id": "q18", "question": "Steps to evict workloads from a Kubernetes GPU node", "gold": ["rb-009-node-drain#kubernetes"]}
+{"id": "q19", "question": "Which DCGM diagnostic level should I run after a repair?", "gold": ["rb-012-dcgm-diagnostics#levels", "rb-018-burn-in-after-repair#required-checks"]}
+{"id": "q20", "question": "GPU utilization and temperature jumped but there are no errors. Is it a fault?", "gold": ["rb-007-noisy-neighbor-triage#how-to-tell-the-difference", "rb-007-noisy-neighbor-triage#when-to-use-this"]}
+{"id": "q21", "question": "What does a thermal_residual alert from the detector mean?", "gold": ["rb-022-detector-alerts-guide#model-alerts"]}
+{"id": "q22", "question": "What is a sev2 incident and how fast do we respond?", "gold": ["rb-019-severity-and-escalation#severity-levels"]}
+{"id": "q23", "question": "Have we had a GPU fall off the bus on h100-node-02 before, and what was the cause?", "gold": ["inc-2025003#report"]}
+{"id": "q24", "question": "What fixed the NVLink errors between GPUs 4 and 5 on h100-node-01?", "gold": ["inc-2025004#report"]}
+{"id": "q25", "question": "PCIe replays on h100-node-03 GPU 6 after maintenance: what was the root cause last time?", "gold": ["inc-2025005#report"]}
+{"id": "q26", "question": "Which fan failed when h100-node-04 GPUs 4-7 were throttling?", "gold": ["inc-2025007#report"]}
+{"id": "q27", "question": "Power capping on h100-node-03 caused by a tripped PDU breaker: how was it resolved?", "gold": ["inc-2025009#report"]}
+{"id": "q28", "question": "A power cap was left in place after a facility event. Has that happened before?", "gold": ["inc-2025002#report"]}
+{"id": "q29", "question": "Degraded PCIe cable to the retimer on h100-node-03", "gold": ["inc-2025012#report"]}
+{"id": "q30", "question": "Was the overheating alert on a100-node-02 a real fault?", "gold": ["inc-2025013#report"]}
+{"id": "u01", "question": "What is the warranty period for our H100 GPUs?", "gold": [], "answerable": false}
+{"id": "u02", "question": "How do I configure InfiniBand adaptive routing on the spine switches?", "gold": [], "answerable": false}
+{"id": "u03", "question": "What is the Kubernetes version running on the inference cluster?", "gold": [], "answerable": false}
+{"id": "u04", "question": "How much does a replacement H100 cost?", "gold": [], "answerable": false}
+{"id": "u05", "question": "How do I rotate the TLS certificates for the ingest API?", "gold": [], "answerable": false}
+{"id": "u06", "question": "What is the procedure for liquid cooling coolant leaks?", "gold": [], "answerable": false}

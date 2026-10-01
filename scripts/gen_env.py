@@ -15,6 +15,8 @@ SECRETS = (
     "GRAFANA_DB_PASSWORD",  # grafana_reader role (read-only)
     "GRAFANA_ADMIN_PASSWORD",
     "DETECTOR_DB_PASSWORD",  # incident_detector role
+    "KNOWLEDGE_DB_PASSWORD",  # knowledge_service role
+    "KNOWLEDGE_API_KEY",  # clients of the knowledge API (the agent in A5)
 )
 
 

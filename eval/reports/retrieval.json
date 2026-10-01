@@ -1,0 +1,74 @@
+{
+  "k": 5,
+  "questions": 36,
+  "modes": {
+    "vector": {
+      "hit@1": 0.4666666666666667,
+      "hit@5": 0.7333333333333333,
+      "mrr@5": 0.5677777777777777,
+      "latency_p50_ms": 4.3
+    },
+    "keyword": {
+      "hit@1": 0.43333333333333335,
+      "hit@5": 0.7,
+      "mrr@5": 0.5527777777777778,
+      "latency_p50_ms": 4.8
+    },
+    "hybrid": {
+      "hit@1": 0.4666666666666667,
+      "hit@5": 0.8333333333333334,
+      "mrr@5": 0.6111111111111112,
+      "latency_p50_ms": 9.2
+    },
+    "rerank": {
+      "hit@1": 0.8,
+      "hit@5": 1.0,
+      "mrr@5": 0.865,
+      "latency_p50_ms": 235.3
+    }
+  },
+  "misses": {
+    "vector": [
+      "q03",
+      "q04",
+      "q05",
+      "q07",
+      "q10",
+      "q15",
+      "q20",
+      "q23"
+    ],
+    "keyword": [
+      "q01",
+      "q07",
+      "q09",
+      "q16",
+      "q18",
+      "q20",
+      "q23",
+      "q25",
+      "q30"
+    ],
+    "hybrid": [
+      "q03",
+      "q07",
+      "q09",
+      "q18",
+      "q23"
+    ],
+    "rerank": []
+  },
+  "gate": {
+    "threshold": -0.36,
+    "answerable_kept": 1.0,
+    "unanswerable_refused": 1.0,
+    "answerable_scores": {
+      "min": 1.47,
+      "median": 6.76
+    },
+    "unanswerable_scores": {
+      "max": -2.19,
+      "median": -6.71
+    }
+  }
+}
