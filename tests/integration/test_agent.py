@@ -2,6 +2,7 @@
 fault investigated end to end by the configured model (Ollama on the host by default)."""
 
 import json
+import os
 import secrets
 import subprocess
 import urllib.error
@@ -79,7 +80,22 @@ def test_approval_requests_are_guarded_by_the_database() -> None:
     sql(f"DELETE FROM approval_requests WHERE node_id = '{node}'")
 
 
+def model_available() -> str | None:
+    """None if the agent's default local model is served, else why not. CI has no model: the
+    18 GB local model doesn't fit a hosted runner."""
+    base = os.environ.get("AGENT_BASE_URL", "http://127.0.0.1:11434/v1")
+    model = os.environ.get("AGENT_MODEL", "qwen3-agent")
+    try:
+        with urllib.request.urlopen(f"{base}/models", timeout=5) as resp:
+            served = {m["id"].split(":")[0] for m in json.load(resp)["data"]}
+    except (urllib.error.URLError, OSError, KeyError, ValueError):
+        return f"no model server at {base} (run `make model`)"
+    return None if model in served else f"model {model!r} not served at {base} (`make model`)"
+
+
 def test_injected_fault_gets_a_cited_diagnosis() -> None:
+    if reason := model_available():
+        pytest.skip(reason)
     try:
         api("/healthz")
     except urllib.error.URLError:
