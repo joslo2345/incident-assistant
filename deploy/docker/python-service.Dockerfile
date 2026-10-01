@@ -27,7 +27,8 @@ FROM python:3.12-slim@sha256:f77ac9e44ae96ef2c90b8053ea08c31f8be030f824196b0ae4d
 RUN apt-get update \
     && apt-get upgrade -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/* \
-    && useradd --system --uid 10001 app
+    && useradd --system --uid 10001 app \
+    && mkdir -p /models && chown app /models  # model cache (knowledge service)
 COPY --from=build /app/.venv /app/.venv
 # Migrations ship in every image; only the consumer's migrate command uses them.
 COPY deploy/db/migrations /app/migrations

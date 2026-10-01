@@ -3,7 +3,7 @@
 Replays GPU cluster telemetry, detects hardware anomalies, and has an agent investigate each
 incident and return a cited diagnosis and suggested fix.
 
-> Work in progress: A3 (anomaly detection) is done; next is A4 (runbook knowledge base and RAG).
+> Work in progress: A4 (knowledge base and RAG) is done; next is A5 (MCP tools and the investigation agent).
 >
 > **Detector, final version: 99% recall, 100% precision, 0/12 decoy alarms** over 72 injected faults ([report](eval/reports/detection.md)).
 
@@ -44,6 +44,7 @@ random local secrets in `deploy/.env` (gitignored). All ports are bound to local
 | Grafana | http://localhost:3000 | Fleet health and System health dashboards; log in as `admin`, password `GRAFANA_ADMIN_PASSWORD` in `deploy/.env` |
 | Prometheus | http://localhost:9090 | metrics from ingest, consumer, Redpanda |
 | TimescaleDB | localhost:5432 | db `telemetry`; roles `postgres` (migrations), `telemetry_writer`, `grafana_reader`; passwords in `deploy/.env` |
+| Knowledge API | http://localhost:8001/docs | `/v1/search`, `/v1/ask`, `/v1/chunks/{id}`; key `KNOWLEDGE_API_KEY` in `deploy/.env` |
 | Redpanda | localhost:19092 | Kafka API; topics `telemetry.raw` (8 partitions), `telemetry.dlq` |
 
 Data flow: ingest → `telemetry.raw` → consumer → TimescaleDB (`gpu_metrics`, `xid_events`, `bmc_log`,
@@ -61,6 +62,24 @@ It runs live in the stack and writes `incidents` (the shared `Incident` contract
 uv run replay --duration 1d --speed 0 --start now-2d --run-id ev1 --faults 14 --bmc-dropout 0.5
 uv run python scripts/eval_detection.py --run-id ev4 --duration 2d --seed 37   # full evaluation
 ```
+
+## Knowledge base
+
+`services/knowledge` holds 22 runbooks and 64 past-incident reports (`knowledge/`), searchable through
+hybrid search (pgvector + full-text, fused with RRF) and a local cross-encoder reranker
+(**recall@5 100%** on the test set, [report](eval/reports/retrieval.md)). `POST /v1/ask` answers with
+citations to the exact runbook section, and says "not enough information" when the sources don't
+cover the question.
+
+```sh
+make up                       # also ingests the corpus
+uv run knowledge eval         # retrieval evaluation (vector / keyword / hybrid / rerank)
+curl -s localhost:8001/v1/ask -H "X-API-Key: $KNOWLEDGE_API_KEY" -H 'content-type: application/json' \
+  -d '{"query": "XID 79 on a GPU, what now?"}'
+```
+
+Answers use Claude when `ANTHROPIC_API_KEY` is set in `deploy/.env`; otherwise they're extractive
+(the best cited passage).
 
 ## Telemetry replayer
 

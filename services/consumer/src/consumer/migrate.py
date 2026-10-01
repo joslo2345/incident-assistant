@@ -1,8 +1,7 @@
 """Applies deploy/db/migrations/*.sql in order, each once, each in its own transaction.
 
-Then, for each service role whose password variable is set (CONSUMER_DB_PASSWORD,
-GRAFANA_DB_PASSWORD, DETECTOR_DB_PASSWORD), enables login with that password. Passwords never
-appear in SQL files.
+Then, for each service role whose password variable is set (see ROLE_PASSWORD_VARS), enables
+login with that password. Passwords never appear in SQL files.
 
 Usage: python -m consumer.migrate [--dir deploy/db/migrations]
 """
@@ -21,6 +20,7 @@ ROLE_PASSWORD_VARS = {
     "telemetry_writer": "CONSUMER_DB_PASSWORD",
     "grafana_reader": "GRAFANA_DB_PASSWORD",
     "incident_detector": "DETECTOR_DB_PASSWORD",
+    "knowledge_service": "KNOWLEDGE_DB_PASSWORD",
 }
 
 

@@ -1,0 +1,544 @@
+{
+  "components": {
+    "schemas": {
+      "AnswerClaim": {
+        "additionalProperties": false,
+        "properties": {
+          "citations": {
+            "items": {
+              "$ref": "#/components/schemas/Citation"
+            },
+            "minItems": 1,
+            "title": "Citations",
+            "type": "array"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text",
+          "citations"
+        ],
+        "title": "AnswerClaim",
+        "type": "object"
+      },
+      "AskRequest": {
+        "additionalProperties": false,
+        "description": "Body for POST /v1/ask.",
+        "properties": {
+          "doc_kind": {
+            "anyOf": [
+              {
+                "enum": [
+                  "runbook",
+                  "incident"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Doc Kind"
+          },
+          "failure_type": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FailureType"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Only chunks tagged with this failure type"
+          },
+          "k": {
+            "default": 5,
+            "maximum": 20.0,
+            "minimum": 1.0,
+            "title": "K",
+            "type": "integer"
+          },
+          "query": {
+            "maxLength": 2000,
+            "minLength": 3,
+            "title": "Query",
+            "type": "string"
+          }
+        },
+        "required": [
+          "query"
+        ],
+        "title": "AskRequest",
+        "type": "object"
+      },
+      "AskResponse": {
+        "additionalProperties": false,
+        "description": "A grounded answer: every claim cites the chunks it came from, or the answer says it can't.",
+        "properties": {
+          "answer": {
+            "title": "Answer",
+            "type": "string"
+          },
+          "claims": {
+            "items": {
+              "$ref": "#/components/schemas/AnswerClaim"
+            },
+            "title": "Claims",
+            "type": "array"
+          },
+          "insufficient_information": {
+            "title": "Insufficient Information",
+            "type": "boolean"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
+          "provider": {
+            "description": "\"claude\", or \"extractive\" when no model is configured",
+            "title": "Provider",
+            "type": "string"
+          },
+          "question": {
+            "title": "Question",
+            "type": "string"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/SourceChunk"
+            },
+            "title": "Sources",
+            "type": "array"
+          }
+        },
+        "required": [
+          "question",
+          "answer",
+          "insufficient_information",
+          "claims",
+          "sources",
+          "provider"
+        ],
+        "title": "AskResponse",
+        "type": "object"
+      },
+      "Citation": {
+        "additionalProperties": false,
+        "description": "Pointer to a knowledge-base chunk (A4) that supports a claim.",
+        "properties": {
+          "chunk_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Chunk Id",
+            "type": "string"
+          },
+          "doc_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Doc Id",
+            "type": "string"
+          },
+          "quote": {
+            "anyOf": [
+              {
+                "maxLength": 1000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quote"
+          }
+        },
+        "required": [
+          "chunk_id",
+          "doc_id"
+        ],
+        "title": "Citation",
+        "type": "object"
+      },
+      "FailureType": {
+        "description": "Root-cause categories shared by the fault injector, detector, and agent.",
+        "enum": [
+          "thermal_runaway",
+          "ecc_degradation",
+          "power_fault",
+          "gpu_off_bus",
+          "nvlink_degradation",
+          "pcie_degradation",
+          "noisy_neighbor",
+          "unknown"
+        ],
+        "title": "FailureType",
+        "type": "string"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "HealthResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "status": {
+            "const": "ok",
+            "default": "ok",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "title": "HealthResponse",
+        "type": "object"
+      },
+      "SearchRequest": {
+        "additionalProperties": false,
+        "description": "Body for POST /v1/search and the retrieval part of POST /v1/ask.",
+        "properties": {
+          "doc_kind": {
+            "anyOf": [
+              {
+                "enum": [
+                  "runbook",
+                  "incident"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Doc Kind"
+          },
+          "failure_type": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FailureType"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Only chunks tagged with this failure type"
+          },
+          "k": {
+            "default": 5,
+            "maximum": 20.0,
+            "minimum": 1.0,
+            "title": "K",
+            "type": "integer"
+          },
+          "query": {
+            "maxLength": 2000,
+            "minLength": 3,
+            "title": "Query",
+            "type": "string"
+          }
+        },
+        "required": [
+          "query"
+        ],
+        "title": "SearchRequest",
+        "type": "object"
+      },
+      "SearchResponse": {
+        "additionalProperties": false,
+        "properties": {
+          "hits": {
+            "items": {
+              "$ref": "#/components/schemas/SourceChunk"
+            },
+            "title": "Hits",
+            "type": "array"
+          },
+          "query": {
+            "title": "Query",
+            "type": "string"
+          }
+        },
+        "required": [
+          "query",
+          "hits"
+        ],
+        "title": "SearchResponse",
+        "type": "object"
+      },
+      "SourceChunk": {
+        "additionalProperties": false,
+        "properties": {
+          "chunk_id": {
+            "title": "Chunk Id",
+            "type": "string"
+          },
+          "doc_id": {
+            "title": "Doc Id",
+            "type": "string"
+          },
+          "doc_kind": {
+            "enum": [
+              "runbook",
+              "incident"
+            ],
+            "title": "Doc Kind",
+            "type": "string"
+          },
+          "heading": {
+            "title": "Heading",
+            "type": "string"
+          },
+          "score": {
+            "description": "Reranker score if reranked, otherwise fused rank score",
+            "title": "Score",
+            "type": "number"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "url": {
+            "description": "GET path that returns this chunk",
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "chunk_id",
+          "doc_id",
+          "doc_kind",
+          "title",
+          "heading",
+          "text",
+          "score",
+          "url"
+        ],
+        "title": "SourceChunk",
+        "type": "object"
+      },
+      "ValidationError": {
+        "properties": {
+          "ctx": {
+            "title": "Context",
+            "type": "object"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Location",
+            "type": "array"
+          },
+          "msg": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Error Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError",
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "APIKeyHeader": {
+        "in": "header",
+        "name": "X-API-Key",
+        "type": "apiKey"
+      }
+    }
+  },
+  "info": {
+    "description": "Hybrid search over runbooks and past incidents, and grounded answers in which every claim cites the chunks it came from.",
+    "title": "Incident Assistant: Knowledge API",
+    "version": "1.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/healthz": {
+      "get": {
+        "operationId": "healthz_healthz_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Liveness check"
+      }
+    },
+    "/v1/ask": {
+      "post": {
+        "operationId": "ask_v1_ask_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AskRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AskResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "summary": "Answer a question with citations"
+      }
+    },
+    "/v1/chunks/{chunk_id}": {
+      "get": {
+        "operationId": "get_chunk_v1_chunks__chunk_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "chunk_id",
+            "required": true,
+            "schema": {
+              "title": "Chunk Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SourceChunk"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "summary": "Fetch a cited chunk"
+      }
+    },
+    "/v1/search": {
+      "post": {
+        "operationId": "search_v1_search_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SearchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SearchResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "summary": "Search the knowledge base"
+      }
+    }
+  }
+}
