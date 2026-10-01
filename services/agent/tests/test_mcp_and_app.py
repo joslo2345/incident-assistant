@@ -116,7 +116,8 @@ def test_only_approvers_can_decide() -> None:
         assert c.post(f"/v1/approvals/{rid}/decision", json=body, headers=AGENT).status_code == 401
         r = c.post(f"/v1/approvals/{rid}/decision", json=body, headers=APPROVER)
         assert r.status_code == 200 and r.json()["status"] == "approved"
-        conflict = c.post(f"/v1/approvals/{rid}/decision",
-                          json={**body, "decided_by": "agent-x"}, headers=APPROVER)  # fmt: skip
-        assert conflict.status_code == 409
+        for name in ("agent-x", "Agent:x", " AGENT"):
+            bad = c.post(f"/v1/approvals/{rid}/decision",
+                         json={**body, "decided_by": name}, headers=APPROVER)  # fmt: skip
+            assert bad.status_code == 422, name
     assert decider.decided == [(rid, True, "alice")]

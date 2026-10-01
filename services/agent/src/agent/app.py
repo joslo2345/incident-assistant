@@ -20,7 +20,7 @@ from typing import Annotated, Any, Literal, Protocol
 from fastapi import Depends, FastAPI, HTTPException, Query, Response, status
 from fastapi.security import APIKeyHeader
 from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_latest
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from starlette.requests import Request
 
 from agent.data import Approvals, DecisionError, FleetData
@@ -85,6 +85,14 @@ class DecisionRequest(BaseModel):
     decision: Literal["approve", "reject"]
     decided_by: str = Field(min_length=2, max_length=100, pattern=r"^[A-Za-z0-9._@ -]+$")
     note: str | None = Field(default=None, max_length=2000)
+
+    @field_validator("decided_by")
+    @classmethod
+    def _a_person(cls, v: str) -> str:
+        # The database trigger enforces this too; reject early with a clear message.
+        if v.strip().lower().startswith("agent"):
+            raise ValueError("decisions are made by people, not agents")
+        return v.strip()
 
 
 def _auth(keys: Callable[[Settings], frozenset[str]]) -> Callable[..., str]:

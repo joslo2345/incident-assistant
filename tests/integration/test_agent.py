@@ -65,7 +65,8 @@ def test_approval_requests_are_guarded_by_the_database() -> None:
                      "'x', 'y', 'z')")  # fmt: skip
     assert denied.returncode != 0 and "permission denied" in denied.stderr
     # Nobody can approve as an agent, or change the request itself while deciding.
-    assert "decided by a person" in decide("approval_service", "approved", "agent:x").stderr
+    for name in ("agent:x", "Agent:x", " AGENT-2", "AGENT:TEST"):
+        assert "decided by a person" in decide("approval_service", "approved", name).stderr, name
     rewrite = as_role(
         "approval_service",
         f"UPDATE approval_requests SET reason = 'other' WHERE request_id = '{rid}'",

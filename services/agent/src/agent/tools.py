@@ -202,6 +202,13 @@ class Toolbox:
         }
 
     async def drain_node(self, a: DrainNode, ctx: ToolContext) -> dict[str, Any]:
+        if ctx.incident_id is not None:
+            # Inside an investigation, only the incident's own node. Log text the model reads
+            # (BMC messages, runbooks) must not be able to steer requests at other nodes.
+            incident = await self.data.incident(ctx.incident_id)
+            node = incident.components[0].node_id if incident else None
+            if a.node_id != node:
+                raise ToolError(f"this investigation can only request a drain of {node!r}")
         if not await self.data.gpus(a.node_id):
             raise ToolError(f"unknown node {a.node_id!r}")
         row, created = await self.approvals.request(

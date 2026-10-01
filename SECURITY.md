@@ -54,10 +54,30 @@ image. Design review of the agent's permissions:
 | Model citing sources it never saw | Citations are checked against chunks returned in the same run; rejected otherwise |
 | Runaway loops or huge tool output | Step, token, per-call and per-run time budgets; results capped at 12k characters |
 
+**2026-10-01, A5 pre-merge review.** gitleaks over the full history of all branches: clean; none
+of the 11 local secrets appears in any tracked file, commit, the PR text, the agent traces in
+Postgres, or container logs; `deploy/.env` was never committed (mode 600). bandit: only
+false positives (constant column lists in f-strings; every value is a bind parameter). Live probes:
+every agent endpoint returns 401 without a valid key (also for empty or wrong keys), an agent key
+can't decide approvals, and the agent API, Ollama and Postgres listen on 127.0.0.1 only.
+
+| Finding | Severity | Status |
+| --- | --- | --- |
+| Self-approval guard was case-sensitive: the approver role could record `decided_by = 'Agent:x'` (verified live) | Medium | Fixed: migration 008 compares trimmed, lower-cased names; the API also rejects agent-like names; integration test covers variants |
+| During an investigation `drain_node` accepted any node, so text planted in a BMC log (writable with the default ingest key) could steer requests at unrelated nodes | Medium | Fixed: inside a run, only the incident's node; unit test |
+
 **Accepted for now (local-only stack, addressed in A8):**
 - The agent container holds the `approval_service` password for its decision endpoint; the agent
   loop never uses it. Splitting approvals into their own service fits A7 (UI) or A8.
 - The MCP server runs over stdio for local clients only; it has no authentication of its own.
+- `decided_by` is whatever the approver key holder types; there is no user identity yet. Real
+  identities and an audit log come with the A7 UI.
+- `POST /investigate` blocks a model for ~2 minutes and runs one at a time, so an agent-key holder
+  can queue work. Localhost-only and authenticated; rate limits belong with A8.
+- `incident_agent` can UPDATE any row of `agent_runs` (it finishes its own runs), so a compromised
+  agent process could edit past traces. Approval rows are immutable regardless.
+- Anyone with the ingest key can write the log text the model reads (prompt injection). The model's
+  only write is a pending request for the incident's own node, decided by a person.
 - Kafka, the Redpanda admin API and Prometheus have no authentication (localhost-only).
 - `/metrics` on ingest is unauthenticated (localhost-only; NetworkPolicy in A8).
 - 44 HIGH base-image CVEs with no Debian fix yet (util-linux and login tools). The services never
