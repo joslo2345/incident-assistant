@@ -25,13 +25,21 @@ def cohen_kappa(pairs: list[tuple[bool, bool]]) -> float | None:
     return 1.0 if expected == 1 else round((observed - expected) / (1 - expected), 3)
 
 
-def calibrate(report: dict[str, Any], grades_path: Path = HAND_GRADES) -> dict[str, Any]:
+def calibrate(
+    report: dict[str, Any], grades_path: Path = HAND_GRADES, incidents: str | None = None
+) -> dict[str, Any]:
+    """`incidents` like "0:10" keeps only those graded incidents (in grading-sheet order), so a
+    judge prompt tuned on some incidents can be measured on the others."""
     judged = {
         (c["case_id"], v["chunk_id"]): v["supported"]
         for c in report["cases"]
         for v in c["citation_verdicts"]
     }
     hand = [json.loads(line) for line in grades_path.read_text().splitlines() if line.strip()]
+    if incidents:
+        lo, hi = (int(x) if x else None for x in incidents.split(":"))
+        keep = set(list(dict.fromkeys(g["case_id"] for g in hand))[lo:hi])
+        hand = [g for g in hand if g["case_id"] in keep]
     pairs, missing = [], []
     for g in hand:
         key = (g["case_id"], g["chunk_id"])

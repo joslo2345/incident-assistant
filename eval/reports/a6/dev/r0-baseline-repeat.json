@@ -1,0 +1,1232 @@
+{
+  "meta": {
+    "set": "dev",
+    "label": "r0-baseline-repeat",
+    "commit": "1b0f0d0",
+    "dirty": false,
+    "provider": "openai_compat",
+    "model": "qwen3-agent",
+    "prompt_sha": "81e8c0d7431f",
+    "judge": "gemma3:12b",
+    "started_at": "2026-10-01T21:39:04+00:00",
+    "finished_at": "2026-10-01T23:02:30+00:00",
+    "composition": {
+      "cases": 25,
+      "by_type": {
+        "ecc_degradation": 4,
+        "gpu_off_bus": 4,
+        "noisy_neighbor": 3,
+        "nvlink_degradation": 3,
+        "pcie_degradation": 3,
+        "power_fault": 4,
+        "thermal_runaway": 4
+      },
+      "decoys": 3,
+      "bmc_dropped": 13
+    }
+  },
+  "summary": {
+    "cases": 25,
+    "succeeded": 25,
+    "root_cause_accuracy": {
+      "n": 18,
+      "of": 25,
+      "rate": 0.72
+    },
+    "root_cause_accuracy_bmc_dropped": {
+      "n": 9,
+      "of": 13,
+      "rate": 0.692
+    },
+    "action_correct": {
+      "n": 18,
+      "of": 25,
+      "rate": 0.72
+    },
+    "unsafe_action_rate": {
+      "n": 0,
+      "of": 3,
+      "rate": 0.0
+    },
+    "missed_action_rate": {
+      "n": 7,
+      "of": 22,
+      "rate": 0.318
+    },
+    "runbook_cited": {
+      "n": 16,
+      "of": 25,
+      "rate": 0.64
+    },
+    "citation_support": 1.0,
+    "latency_s_p50": 178.3,
+    "latency_s_p95": 270.6,
+    "tokens_per_case": 22927,
+    "cost_usd_per_case": 0.0,
+    "tool_errors": 7,
+    "text_tool_calls": 5,
+    "by_type": {
+      "ecc_degradation": {
+        "cases": 4,
+        "root_cause": 3,
+        "action": 3
+      },
+      "gpu_off_bus": {
+        "cases": 4,
+        "root_cause": 4,
+        "action": 4
+      },
+      "noisy_neighbor": {
+        "cases": 3,
+        "root_cause": 3,
+        "action": 3
+      },
+      "nvlink_degradation": {
+        "cases": 3,
+        "root_cause": 2,
+        "action": 2
+      },
+      "pcie_degradation": {
+        "cases": 3,
+        "root_cause": 2,
+        "action": 2
+      },
+      "power_fault": {
+        "cases": 4,
+        "root_cause": 2,
+        "action": 1
+      },
+      "thermal_runaway": {
+        "cases": 4,
+        "root_cause": 2,
+        "action": 3
+      }
+    }
+  },
+  "cases": [
+    {
+      "case_id": "a6dev/f021-pcie_degradation",
+      "incident_id": "7b9597fe-150f-5703-8f6e-489afb129011",
+      "truth": "pcie_degradation",
+      "is_fault": true,
+      "bmc_dropped": true,
+      "run_id": "79b256f7-de24-4bcc-9915-20ca08ad3709",
+      "status": "succeeded",
+      "root_cause": "pcie_degradation",
+      "confidence": 0.9,
+      "action": "drain_node",
+      "cited_chunks": [
+        "rb-006-pcie-degradation#symptoms",
+        "rb-006-pcie-degradation#remediation"
+      ],
+      "summary": "GPU 2 on a6dev-h100-node-02 shows steadily increasing PCIe replays (320-813 in 10-min intervals) with no hardware errors (XID, BMC logs, ECC, NVLink errors) or abnormal temperatures/power. This matches the symptom of 'steady replay counter increase' (rb-006-pcie-degradation#symptoms) and aligns with remediation to drain the node (rb-006-pcie-degradation#remediation).",
+      "rationale": "PCIe replay counter exceeds threshold without other hardware errors; runbook states to schedule drain for persistent replays (rb-006-pcie-degradation#remediation).",
+      "steps": 4,
+      "tool_calls": 3,
+      "tool_errors": 0,
+      "text_tool_calls": 0,
+      "input_tokens": 25383,
+      "output_tokens": 3940,
+      "cost_usd": 0.0,
+      "latency_s": 129.864,
+      "root_cause_correct": true,
+      "action_correct": true,
+      "unsafe_action": false,
+      "missed_action": false,
+      "runbook_cited": true,
+      "citation_verdicts": [
+        {
+          "chunk_id": "rb-006-pcie-degradation#symptoms",
+          "supported": true,
+          "reason": "The passage explicitly states that a 'steady increase' in the PCIe replay counter (tens to hundreds per minute) is a symptom of PCIe link degradation, which aligns with the diagnosis's description of steadily increasing replays."
+        },
+        {
+          "chunk_id": "rb-006-pcie-degradation#remediation",
+          "supported": true,
+          "reason": "The passage explicitly recommends draining the node as a remediation for PCIe replays without errors, aligning with the diagnosis's recommended action and rationale."
+        }
+      ],
+      "citation_support": 1.0
+    },
+    {
+      "case_id": "a6dev/f012-nvlink_degradation",
+      "incident_id": "a31dd97f-eac0-57ed-b60c-6a7ab8719f3c",
+      "truth": "nvlink_degradation",
+      "is_fault": true,
+      "bmc_dropped": true,
+      "run_id": "f596d7a6-fe97-4589-8ff0-86cb94a3e352",
+      "status": "succeeded",
+      "root_cause": "nvlink_degradation",
+      "confidence": 0.95,
+      "action": "drain_node",
+      "cited_chunks": [
+        "rb-005-nvlink-degradation#symptoms",
+        "rb-005-nvlink-degradation#remediation"
+      ],
+      "summary": "NVLink CRC errors on GPUs 2 and 3 (3986/3927 increases) with XID 74 error confirm NVLink degradation. Temperatures (50-60\u00b0C) and power usage (318-400W) are normal, ruling out thermal or power faults. Runbook symptoms match: CRC errors climbing to hundreds per minute and XID 74. Affected GPUs share a link (per NVLink architecture), causing job slowdowns.",
+      "rationale": "Degraded NVLink links slow all jobs using GPUs 2/3; drain prevents further job impact until hardware repair. Runbook remediation requires node drain before reset/reboot.",
+      "steps": 4,
+      "tool_calls": 4,
+      "tool_errors": 1,
+      "text_tool_calls": 1,
+      "input_tokens": 13437,
+      "output_tokens": 4535,
+      "cost_usd": 0.0,
+      "latency_s": 209.693,
+      "root_cause_correct": true,
+      "action_correct": true,
+      "unsafe_action": false,
+      "missed_action": false,
+      "runbook_cited": true,
+      "citation_verdicts": [
+        {
+          "chunk_id": "rb-005-nvlink-degradation#symptoms",
+          "supported": true,
+          "reason": "The passage explicitly lists NVLink CRC errors climbing to hundreds per minute and XID 74 as symptoms of NVLink degradation, directly supporting the diagnosis's summary and root cause."
+        },
+        {
+          "chunk_id": "rb-005-nvlink-degradation#remediation",
+          "supported": true,
+          "reason": "The passage explicitly recommends draining the node as a remediation for NVLink degradation, aligning with the diagnosis's recommended action and rationale."
+        }
+      ],
+      "citation_support": 1.0
+    },
+    {
+      "case_id": "a6dev/f023-power_fault",
+      "incident_id": "65fe236c-f785-5848-a198-5ca568b9bcc8",
+      "truth": "power_fault",
+      "is_fault": true,
+      "bmc_dropped": true,
+      "run_id": "77d16a27-9f75-4fa0-bee3-f3ce83f3d88a",
+      "status": "succeeded",
+      "root_cause": "noisy_neighbor",
+      "confidence": 0.9,
+      "action": "none",
+      "cited_chunks": [
+        "rb-007-noisy-neighbor-triage#when-to-use-this",
+        "rb-007-noisy-neighbor-triage#what-to-do"
+      ],
+      "summary": "All GPUs (0-7) showed reduced power limits (420W vs nominal 700W) and high utilization (90-95%) with no hardware errors (XID, ECC, BMC logs). The [workload_shift] signal (z-score -5.2 to -5.5) and normal temperatures (60-70\u00b0C) confirm a heavy workload shift, not a hardware fault. GPU 4 was idle (30\u00b0C, 70W), confirming the workload was concentrated on other GPUs. No action needed beyond monitoring.",
+      "rationale": "Workload shift confirmed; no hardware errors or thermal issues. Monitoring is sufficient.",
+      "steps": 4,
+      "tool_calls": 3,
+      "tool_errors": 0,
+      "text_tool_calls": 0,
+      "input_tokens": 13762,
+      "output_tokens": 8789,
+      "cost_usd": 0.0,
+      "latency_s": 327.689,
+      "root_cause_correct": false,
+      "action_correct": false,
+      "unsafe_action": false,
+      "missed_action": true,
+      "runbook_cited": false,
+      "citation_verdicts": [
+        {
+          "chunk_id": "rb-007-noisy-neighbor-triage#when-to-use-this",
+          "supported": true,
+          "reason": "The passage describes a scenario of high utilization and no hardware errors, aligning with the diagnosis's summary of reduced power limits, high utilization, and lack of hardware errors, and attributes it to workload changes like a noisy neighbor."
+        },
+        {
+          "chunk_id": "rb-007-noisy-neighbor-triage#what-to-do",
+          "supported": true,
+          "reason": "The passage explicitly states that a confirmed workload shift warrants no hardware action and suggests checking GPU isolation, aligning with the diagnosis's recommendation of monitoring and acknowledging a potential scheduling issue."
+        }
+      ],
+      "citation_support": 1.0
+    },
+    {
+      "case_id": "a6dev/f022-gpu_off_bus",
+      "incident_id": "bafc586c-ce89-5e0e-b228-79057785cf13",
+      "truth": "gpu_off_bus",
+      "is_fault": true,
+      "bmc_dropped": false,
+      "run_id": "0ca782f7-0800-43ce-8154-c3d9c336c4f2",
+      "status": "succeeded",
+      "root_cause": "gpu_off_bus",
+      "confidence": 0.95,
+      "action": "drain_node",
+      "cited_chunks": [
+        "rb-004-gpu-off-bus#remediation"
+      ],
+      "summary": "GPU 0 fell off the bus (XID 79) with BMC PCIe fatal error at 2026-09-30T14:05:09Z. Telemetry shows GPU 0 stopped reporting (0 samples) while other GPUs remained active. No thermal/power anomalies or ECC errors. Matches runbook symptoms for GPU off bus (rb-004-gpu-off-bus#symptoms).",
+      "rationale": "GPU is off the bus (XID 79) and cannot be recovered without rebooting the node. Per runbook remediation: drain node first (rb-009-node-drain), then reboot.",
+      "steps": 5,
+      "tool_calls": 4,
+      "tool_errors": 1,
+      "text_tool_calls": 0,
+      "input_tokens": 15471,
+      "output_tokens": 3857,
+      "cost_usd": 0.0,
+      "latency_s": 222.792,
+      "root_cause_correct": true,
+      "action_correct": true,
+      "unsafe_action": false,
+      "missed_action": false,
+      "runbook_cited": true,
+      "citation_verdicts": [
+        {
+          "chunk_id": "rb-004-gpu-off-bus#remediation",
+          "supported": true,
+          "reason": "The passage explicitly states that draining the node is a remediation step for a GPU off the bus (XID 79), which aligns with the diagnosis's recommended action."
+        }
+      ],
+      "citation_support": 1.0
+    },
+    {
+      "case_id": "a6dev/f020-gpu_off_bus",
+      "incident_id": "3acd13a4-482c-5b39-b528-ff3e4b59203c",
+      "truth": "gpu_off_bus",
+      "is_fault": true,
+      "bmc_dropped": true,
+      "run_id": "51c2d0bd-636c-4195-83a0-db2f7472dd0e",
+      "status": "succeeded",
+      "root_cause": "gpu_off_bus",
+      "confidence": 0.9,
+      "action": "drain_node",
+      "cited_chunks": [
+        "rb-004-gpu-off-bus#remediation",
+        "inc-2025010#report",
+        "inc-2025024#report"
+      ],
+      "summary": "GPU 6 fell off the bus (XID 79) with no preceding hardware errors or thermal anomalies. Telemetry shows normal power/temperature (31\u00b0C avg) and zero PCIe replay errors before failure. Runbook analysis confirms XID 79 typically indicates faulty PCIe riser (see inc-2025010#report, inc-2025024#report).",
+      "rationale": "XID 79 requires node drain and reboot per runbook remediation (rb-004-gpu-off-bus#remediation). GPU cannot recover while OS is running; PCIe riser replacement needed after reboot.",
+      "steps": 5,
+      "tool_calls": 4,
+      "tool_errors": 1,
+      "text_tool_calls": 0,
+      "input_tokens": 22240,
+      "output_tokens": 3668,
+      "cost_usd": 0.0,
+      "latency_s": 223.677,
+      "root_cause_correct": true,
+      "action_correct": true,
+      "unsafe_action": false,
+      "missed_action": false,
+      "runbook_cited": true,
+      "citation_verdicts": [
+        {
+          "chunk_id": "rb-004-gpu-off-bus#remediation",
+          "supported": true,
+          "reason": "The passage explicitly states that draining the node and rebooting are required remediations for a GPU falling off the bus (XID 79), directly supporting the recommended action in the diagnosis."
+        },
+        {
+          "chunk_id": "inc-2025010#report",
+          "supported": true,
+          "reason": "This passage explicitly states that a faulty PCIe riser was the root cause of a GPU falling off the bus (XID 79), aligning with the diagnosis's root cause and rationale."
+        },
+        {
+          "chunk_id": "inc-2025024#report",
+          "supported": true,
+          "reason": "The passage explicitly states that a faulty PCIe riser was the root cause of a similar GPU off-bus error (XID 79) and required a node reboot, aligning with the diagnosis's root cause and recommended action."
+        }
+      ],
+      "citation_support": 1.0
+    },
+    {
+      "case_id": "a6dev/f024-thermal_runaway",
+      "incident_id": "59c54acf-cdc7-576c-af4e-ba6cd83ef728",
+      "truth": "thermal_runaway",
+      "is_fault": true,
+      "bmc_dropped": false,
+      "run_id": "3fdd5cc5-9cfe-4457-9b77-a623a16041ef",
+      "status": "succeeded",
+      "root_cause": "thermal_runaway",
+      "confidence": 0.95,
+      "action": "drain_node",
+      "cited_chunks": [
+        "rb-001-thermal-runaway#symptoms",
+        "inc-2025000#report",
+        "inc-2025021#report"
+      ],
+      "summary": "BMC reported FAN2 at 0 RPM (critical low threshold) at 2026-09-30T18:32:29Z, causing GPUs 0-3 to overheat (max 86\u00b0C) while GPUs 4-7 remained cool (62-65\u00b0C). Thermal residual alerts (ev-1,2,3) and throttling (ev-13,23,26) confirmed overheating. Runbook symptoms match: BMC fan failure, GPU temps >5\u00b0C above power-predicted, and throttling. No hardware errors (XID, ECC, PCIe) observed. Root cause is fan failure, not workload behavior.",
+      "rationale": "Fan module FAN2 failed (bearing failure), causing thermal runaway. Requires hardware replacement (hot-swap). Drain node to prevent further job impact.",
+      "steps": 4,
+      "tool_calls": 3,
+      "tool_errors": 0,
+      "text_tool_calls": 0,
+      "input_tokens": 16254,
+      "output_tokens": 5295,
+      "cost_usd": 0.0,
+      "latency_s": 231.722,
+      "root_cause_correct": true,
+      "action_correct": true,
+      "unsafe_action": false,
+      "missed_action": false,
+      "runbook_cited": true,
+      "citation_verdicts": [
+        {
+          "chunk_id": "rb-001-thermal-runaway#symptoms",
+          "supported": true,
+          "reason": "The passage explicitly lists a BMC SEL entry for a fan sensor crossing a critical low threshold (0 RPM) and GPU temperatures rising above power predictions as symptoms of thermal runaway, directly supporting the diagnosis."
+        },
+        {
+          "chunk_id": "inc-2025000#report",
+          "supported": true,
+          "reason": "The passage describes a similar incident with a failed fan module (FAN1) leading to GPU overheating and requiring node draining and hot-swapping, directly supporting the diagnosis's root cause and recommended action."
+        },
+        {
+          "chunk_id": "inc-2025021#report",
+          "supported": true,
+          "reason": "The passage describes a similar incident with a failed fan (FAN1 instead of FAN2), GPU overheating, and resolution involving draining the node and hot-swapping the fan, directly supporting the diagnosis's root cause and recommended action."
+        }
+      ],
+      "citation_support": 1.0
+    },
+    {
+      "case_id": "a6dev/f017-ecc_degradation",
+      "incident_id": "555ba56d-c3a6-5aec-8d0a-a32735ff583c",
+      "truth": "ecc_degradation",
+      "is_fault": true,
+      "bmc_dropped": true,
+      "run_id": "d4a3ef9d-86ad-4ff1-b6df-660bbc30ccee",
+      "status": "succeeded",
+      "root_cause": "ecc_degradation",
+      "confidence": 0.9,
+      "action": "drain_node",
+      "cited_chunks": [
+        "rb-002-ecc-degradation#escalation",
+        "rb-002-ecc-degradation#diagnosis"
+      ],
+      "summary": "GPU 3 on a6dev-h100-node-05 showed accelerating correctable ECC errors (SBE) increasing from 5 to 53 per 30 minutes, followed by an uncorrectable error (DBE) and XID 48 (DBE ECC error). The node's BMC logged a minor inlet temperature warning (36\u00b0C), but GPU 3's temperature (69\u00b0C avg) was only slightly elevated compared to neighbors (67-68\u00b0C avg). No hardware errors (XID, PCIe, NVLink) or temperatures beyond slowdown limits were observed on other GPUs. The evidence aligns with runbook guidance for ecc_degradation escalation (sev1 on DBE/XID 48).",
+      "rationale": "GPU 3 has experienced uncorrectable ECC errors (DBE) and XID 48, indicating imminent failure risk. Per runbook, sev1 requires moving work off the GPU before job crashes. Drain the node to prevent further failures.",
+      "steps": 4,
+      "tool_calls": 3,
+      "tool_errors": 1,
+      "text_tool_calls": 0,
+      "input_tokens": 14750,
+      "output_tokens": 4457,
+      "cost_usd": 0.0,
+      "latency_s": 201.077,
+      "root_cause_correct": true,
+      "action_correct": true,
+      "unsafe_action": false,
+      "missed_action": false,
+      "runbook_cited": true,
+      "citation_verdicts": [
+        {
+          "chunk_id": "rb-002-ecc-degradation#escalation",
+          "supported": true,
+          "reason": "The passage explicitly states that a severity 1 (sev1) escalation is triggered by a DBE (uncorrectable error), which aligns directly with the diagnosis's root cause and recommended action."
+        },
+        {
+          "chunk_id": "rb-002-ecc-degradation#diagnosis",
+          "supported": true,
+          "reason": "The passage provides specific commands to check ECC error counters and rates, directly supporting the diagnosis's focus on the increasing correctable ECC errors (SBE) and eventual uncorrectable error (DBE) as indicators of ecc_degradation."
+        }
+      ],
+      "citation_support": 1.0
+    },
+    {
+      "case_id": "a6dev/f016-pcie_degradation",
+      "incident_id": "78e58b9f-b3c5-58ab-9eb2-c683b804c444",
+      "truth": "pcie_degradation",
+      "is_fault": true,
+      "bmc_dropped": false,
+      "run_id": "e2547311-c41c-4383-aee1-9b8dc316f306",
+      "status": "succeeded",
+      "root_cause": "noisy_neighbor",
+      "confidence": 0.9,
+      "action": "none",
+      "cited_chunks": [
+        "rb-007-noisy-neighbor-triage#when-to-use-this",
+        "rb-007-noisy-neighbor-triage#what-to-do"
+      ],
+      "summary": "GPU 3 showed high PCIe replays (208-1567) during a 3-minute window, but telemetry shows no hardware errors (XID, ECC, NVLink CRC, BMC faults), temperatures (max 65\u00b0C) and power (330-394W) within normal operational limits for high utilization (80-98%). The replays correlate with workload spikes, not hardware degradation. Runbook confirms 'noisy neighbor' when high utilization occurs without hardware errors.",
+      "rationale": "No hardware errors detected; workload shift confirmed by telemetry. Never drain node for high utilization alone (runbook).",
+      "steps": 4,
+      "tool_calls": 3,
+      "tool_errors": 0,
+      "text_tool_calls": 0,
+      "input_tokens": 19999,
+      "output_tokens": 3734,
+      "cost_usd": 0.0,
+      "latency_s": 204.267,
+      "root_cause_correct": false,
+      "action_correct": false,
+      "unsafe_action": false,
+      "missed_action": true,
+      "runbook_cited": false,
+      "citation_verdicts": [
+        {
+          "chunk_id": "rb-007-noisy-neighbor-triage#when-to-use-this",
+          "supported": true,
+          "reason": "The passage explicitly describes a scenario of high utilization without hardware errors, aligning with the diagnosis's description of GPU 3's behavior and suggesting a workload change like a noisy neighbor."
+        },
+        {
+          "chunk_id": "rb-007-noisy-neighbor-triage#what-to-do",
+          "supported": true,
+          "reason": "The passage explicitly states 'no hardware action' when a workload shift is confirmed, aligning with the diagnosis's recommendation of no action and rationale against draining the node due to high utilization."
+        }
+      ],
+      "citation_support": 1.0
+    },
+    {
+      "case_id": "a6dev/f008-power_fault",
+      "incident_id": "0fadf1a0-e84f-5d25-9756-3c8e1cbb8278",
+      "truth": "power_fault",
+      "is_fault": true,
+      "bmc_dropped": false,
+      "run_id": "f27b19a5-7010-4f9c-9dc3-0707fca5345b",
+      "status": "succeeded",
+      "root_cause": "power_fault",
+      "confidence": 0.9,
+      "action": "drain_node",
+      "cited_chunks": [
+        "rb-013-bmc-redfish-triage#interpreting-entries",
+        "rb-015-power-capping-policy#when-nodes-get-capped",
+        "rb-007-noisy-neighbor-triage#how-to-tell-the-difference"
+      ],
+      "summary": "BMC log shows PSU1 input loss (rb-013-bmc-redfish-triage#interpreting-entries), triggering automatic power capping (rb-015-power-capping-policy#when-nodes-get-capped). All GPUs show reduced power limits (240W vs 400W) with high utilization (90-93%) and no hardware errors (ECC/PCIe/NVLink counters unchanged), confirming workload behavior matches power draw (rb-007-noisy-neighbor-triage#how-to-tell-the-difference). GPU 7's low power is due to inactivity, not fault.",
+      "rationale": "PSU fault requires hardware intervention; drain_node requests human approval for PSU replacement.",
+      "steps": 4,
+      "tool_calls": 3,
+      "tool_errors": 0,
+      "text_tool_calls": 0,
+      "input_tokens": 12418,
+      "output_tokens": 4603,
+      "cost_usd": 0.0,
+      "latency_s": 201.915,
+      "root_cause_correct": true,
+      "action_correct": true,
+      "unsafe_action": false,
+      "missed_action": false,
+      "runbook_cited": false,
+      "citation_verdicts": [
+        {
+          "chunk_id": "rb-013-bmc-redfish-triage#interpreting-entries",
+          "supported": true,
+          "reason": "The passage explicitly states that `ResourceErrorsDetected` on a PSU indicates a power supply problem, which aligns with the diagnosis's root cause of `power_fault`."
+        },
+        {
+          "chunk_id": "rb-015-power-capping-policy#when-nodes-get-capped",
+          "supported": true,
+          "reason": "The passage explicitly states that power capping occurs automatically when PSU redundancy is lost, which aligns with the diagnosis's root cause of a power fault."
+        },
+        {
+          "chunk_id": "rb-007-noisy-neighbor-triage#how-to-tell-the-difference",
+          "supported": true,
+          "reason": "The passage explicitly mentions checking error counters (ECC, PCIe replay, NVLink) to differentiate between hardware faults and workload changes, aligning with the diagnosis's observation of unchanged counters."
+        }
+      ],
+      "citation_support": 1.0
+    },
+    {
+      "case_id": "a6dev/f011-power_fault",
+      "incident_id": "a8657ae8-8dbf-51d3-a6a8-78f174b388fd",
+      "truth": "power_fault",
+      "is_fault": true,
+      "bmc_dropped": true,
+      "run_id": "0645a9ec-059e-459e-9dab-7e732c4e50f5",
+      "status": "succeeded",
+      "root_cause": "noisy_neighbor",
+      "confidence": 0.9,
+      "action": "none",
+      "cited_chunks": [
+        "rb-007-noisy-neighbor-triage#when-to-use-this",
+        "rb-007-noisy-neighbor-triage#what-to-do"
+      ],
+      "summary": "All 8 GPUs on a6dev-h100-node-05 showed reduced power limits (420W vs nominal 700W) and high utilization (90-94%) with no hardware errors (XID, ECC, PCIe/NVLink errors, or sustained BMC faults). BMC showed a transient inlet temperature warning (36.1\u00b0C, threshold 35.0\u00b0C) that resolved within 4 minutes. Power z-scores (z=-4.8 to -4.9) confirmed a workload shift, not a fault. The thermal data (GPU temps 58-70\u00b0C) remained within normal operating range, with no throttling beyond expected for high utilization. This matches the 'noisy_neighbor' pattern: high power/utilization explained by workload change, no hardware degradation.",
+      "rationale": "Workload shift confirmed; no hardware action required. All GPUs affected uniformly, no persistent errors, and BMC warning resolved. Draining the node would be unnecessary and disruptive.",
+      "steps": 4,
+      "tool_calls": 3,
+      "tool_errors": 0,
+      "text_tool_calls": 0,
+      "input_tokens": 14430,
+      "output_tokens": 6129,
+      "cost_usd": 0.0,
+      "latency_s": 177.013,
+      "root_cause_correct": false,
+      "action_correct": false,
+      "unsafe_action": false,
+      "missed_action": true,
+      "runbook_cited": false,
+      "citation_verdicts": [
+        {
+          "chunk_id": "rb-007-noisy-neighbor-triage#when-to-use-this",
+          "supported": true,
+          "reason": "The passage describes a scenario of high utilization, power, and temperature without hardware errors, which aligns with the 'noisy_neighbor' root cause described in the diagnosis."
+        },
+        {
+          "chunk_id": "rb-007-noisy-neighbor-triage#what-to-do",
+          "supported": true,
+          "reason": "The passage explicitly states that a confirmed workload shift warrants 'no hardware action' and suggests checking GPU isolation, aligning with the diagnosis's recommendation and rationale."
+        }
+      ],
+      "citation_support": 1.0
+    },
+    {
+      "case_id": "a6dev/f001-ecc_degradation",
+      "incident_id": "285bbd6c-4fb2-593d-bd8b-458178184a3e",
+      "truth": "ecc_degradation",
+      "is_fault": true,
+      "bmc_dropped": false,
+      "run_id": "fcb3733d-782e-48c8-a378-bc4ce171cf89",
+      "status": "succeeded",
+      "root_cause": "ecc_degradation",
+      "confidence": 0.9,
+      "action": "drain_node",
+      "cited_chunks": [
+        "rb-002-ecc-degradation#diagnosis",
+        "rb-002-ecc-degradation#escalation"
+      ],
+      "summary": "GPU 0 on a6dev-a100-node-01 showed accelerating correctable ECC errors (SBE) from 5/30min to 50-51/30min, culminating in an uncorrectable ECC error (DBE) with XID 48 (DBE error). BMC inlet temperature warning (36.2\u00b0C) was present but GPU temps (65-67\u00b0C) were below thermal throttling thresholds, ruling out thermal runaway. PCIe replay errors (1 total) were low and unrelated. Runbook diagnosis confirms rising SBE rate is the key indicator for ECC degradation, with DBE/XID 48 triggering sev1.",
+      "rationale": "GPU has uncorrectable ECC error (DBE) with XID 48, confirming hardware degradation. Per runbook escalation, sev1 requires node drain for RMA (runbook rb-002-ecc-degradation#escalation).",
+      "steps": 3,
+      "tool_calls": 2,
+      "tool_errors": 0,
+      "text_tool_calls": 0,
+      "input_tokens": 19325,
+      "output_tokens": 3942,
+      "cost_usd": 0.0,
+      "latency_s": 133.128,
+      "root_cause_correct": true,
+      "action_correct": true,
+      "unsafe_action": false,
+      "missed_action": false,
+      "runbook_cited": true,
+      "citation_verdicts": [
+        {
+          "chunk_id": "rb-002-ecc-degradation#diagnosis",
+          "supported": true,
+          "reason": "The passage emphasizes checking ECC error rates over time and highlights that repeated ECC incidents on a single GPU indicate a need for RMA, which aligns with the diagnosis's root cause and recommended action."
+        },
+        {
+          "chunk_id": "rb-002-ecc-degradation#escalation",
+          "supported": true,
+          "reason": "The passage explicitly states that a DBE error triggers sev1, which aligns with the diagnosis's conclusion that a DBE error necessitates a node drain."
+        }
+      ],
+      "citation_support": 1.0
+    },
+    {
+      "case_id": "a6dev/f018-ecc_degradation",
+      "incident_id": "dc5e1e47-2cab-5e37-8daa-51a7de7bc295",
+      "truth": "ecc_degradation",
+      "is_fault": true,
+      "bmc_dropped": false,
+      "run_id": "d8c96d2f-16bf-4907-a13d-21c3ec83af9e",
+      "status": "succeeded",
+      "root_cause": "noisy_neighbor",
+      "confidence": 0.9,
+      "action": "none",
+      "cited_chunks": [
+        "rb-007-noisy-neighbor-triage#what-to-do",
+        "rb-007-noisy-neighbor-triage#when-to-use-this"
+      ],
+      "summary": "GPU 4 and 6 showed significantly lower temperature (41.4\u00b0C avg vs 63-65\u00b0C for neighbors), power (183W vs 373W avg), and utilization (37% vs 92% avg) during the incident window. This aligns with the detector's [workload_shift] evidence (ev-0, ev-1, ev-2) and matches the runbook description of a workload change (rb-007-noisy-neighbor-triage#what-to-do). No hardware errors (XID, ECC, BMC logs) were observed (get_logs returned 0 entries), confirming this is a normal workload shift, not a fault.",
+      "rationale": "Workload shift confirmed: no hardware action required. The metrics are fully explained by power draw (lower utilization), and the runbook explicitly states 'no hardware action' for confirmed workload shifts.",
+      "steps": 4,
+      "tool_calls": 3,
+      "tool_errors": 0,
+      "text_tool_calls": 0,
+      "input_tokens": 12678,
+      "output_tokens": 5487,
+      "cost_usd": 0.0,
+      "latency_s": 152.112,
+      "root_cause_correct": false,
+      "action_correct": false,
+      "unsafe_action": false,
+      "missed_action": true,
+      "runbook_cited": false,
+      "citation_verdicts": [
+        {
+          "chunk_id": "rb-007-noisy-neighbor-triage#what-to-do",
+          "supported": true,
+          "reason": "The passage explicitly states 'Workload shift confirmed: no hardware action' which directly supports the diagnosis's recommended action and rationale."
+        },
+        {
+          "chunk_id": "rb-007-noisy-neighbor-triage#when-to-use-this",
+          "supported": true,
+          "reason": "The passage describes a scenario with high utilization, power, and temperature without hardware errors, aligning with the diagnosis's observation of lower temperature, power, and utilization, and attributing it to a workload change or noisy neighbor."
+        }
+      ],
+      "citation_support": 1.0
+    },
+    {
+      "case_id": "a6dev/f000-pcie_degradation",
+      "incident_id": "6a19a40e-8bf1-5ab5-8764-dc6a4d65fdcf",
+      "truth": "pcie_degradation",
+      "is_fault": true,
+      "bmc_dropped": false,
+      "run_id": "201e317f-8dea-435d-8228-d4ba649b6e66",
+      "status": "succeeded",
+      "root_cause": "pcie_degradation",
+      "confidence": 0.9,
+      "action": "drain_node",
+      "cited_chunks": [
+        "rb-006-pcie-degradation#symptoms",
+        "rb-006-pcie-degradation#remediation"
+      ],
+      "summary": "GPU 0 on a6dev-h100-node-01 showed rapidly increasing PCIe replay counters (270\u2192722 in 2 minutes), exceeding the 100 threshold. Metrics show no thermal issues (temp avg 37-40\u00b0C), power within limits, and no ECC/PCIe errors in logs. Runbook symptoms match: steady replay counter increase (tens/hundreds/min) without hardware errors. Remediation requires draining the node to prevent GPU off-bus failure.",
+      "rationale": "PCIe replay counter increased from 270 to 722 in 2 minutes (exceeding 100 threshold), matching runbook symptoms. No hardware errors detected, but persistent replays indicate degradation requiring node drain before GPU falls off bus.",
+      "steps": 4,
+      "tool_calls": 3,
+      "tool_errors": 0,
+      "text_tool_calls": 0,
+      "input_tokens": 25580,
+      "output_tokens": 4405,
+      "cost_usd": 0.0,
+      "latency_s": 145.985,
+      "root_cause_correct": true,
+      "action_correct": true,
+      "unsafe_action": false,
+      "missed_action": false,
+      "runbook_cited": true,
+      "citation_verdicts": [
+        {
+          "chunk_id": "rb-006-pcie-degradation#symptoms",
+          "supported": true,
+          "reason": "The passage explicitly states that a steady increase in the PCIe replay counter (tens to hundreds per minute) is a symptom of PCIe link degradation, which aligns with the diagnosis's observation of a rapidly increasing replay counter."
+        },
+        {
+          "chunk_id": "rb-006-pcie-degradation#remediation",
+          "supported": true,
+          "reason": "The passage explicitly states that replays without errors often precede a GPU falling off the bus and recommends scheduling a drain, directly supporting the recommended action and rationale in the diagnosis."
+        }
+      ],
+      "citation_support": 1.0
+    },
+    {
+      "case_id": "a6dev/f003-nvlink_degradation",
+      "incident_id": "0286a452-9e71-554e-80e0-ea1aa49d6801",
+      "truth": "nvlink_degradation",
+      "is_fault": true,
+      "bmc_dropped": false,
+      "run_id": "12d0267e-5e35-4d4a-9355-d8d02b3bcd8d",
+      "status": "succeeded",
+      "root_cause": "nvlink_degradation",
+      "confidence": 0.95,
+      "action": "drain_node",
+      "cited_chunks": [
+        "rb-005-nvlink-degradation#symptoms",
+        "rb-005-nvlink-degradation#remediation"
+      ],
+      "summary": "GPU 4 and 5 showed sustained NVLink CRC error spikes (4767/4640 total increase) and XID 74 errors, matching runbook symptoms of degraded NVLink links. Temperatures and power were normal (GPU 4 max 66.2\u00b0C, GPU 5 max 48.3\u00b0C), ruling out thermal issues. No ECC/PCIe errors or workload anomalies (other GPUs showed normal utilization), confirming NVLink degradation, not noisy_neighbor or hardware failure.",
+      "rationale": "Degraded NVLink links slow all multi-GPU jobs using the affected pair; draining prevents further job degradation until remediation (per runbook remediation steps).",
+      "steps": 5,
+      "tool_calls": 4,
+      "tool_errors": 1,
+      "text_tool_calls": 0,
+      "input_tokens": 16809,
+      "output_tokens": 4296,
+      "cost_usd": 0.0,
+      "latency_s": 123.315,
+      "root_cause_correct": true,
+      "action_correct": true,
+      "unsafe_action": false,
+      "missed_action": false,
+      "runbook_cited": true,
+      "citation_verdicts": [
+        {
+          "chunk_id": "rb-005-nvlink-degradation#symptoms",
+          "supported": true,
+          "reason": "The passage explicitly lists NVLink CRC errors and XID 74 errors as symptoms of NVLink degradation, which aligns with the diagnosis's summary of observed symptoms."
+        },
+        {
+          "chunk_id": "rb-005-nvlink-degradation#remediation",
+          "supported": true,
+          "reason": "The passage explicitly recommends draining the node as a remediation step for NVLink degradation, aligning with the diagnosis's recommended action and rationale."
+        }
+      ],
+      "citation_support": 1.0
+    },
+    {
+      "case_id": "a6dev/f013-ecc_degradation",
+      "incident_id": "c77b2541-1731-52ff-8a04-14c77d6d9c08",
+      "truth": "ecc_degradation",
+      "is_fault": true,
+      "bmc_dropped": true,
+      "run_id": "256450c8-e058-44ce-9ee9-ce829f4380c1",
+      "status": "succeeded",
+      "root_cause": "ecc_degradation",
+      "confidence": 0.9,
+      "action": "drain_node",
+      "cited_chunks": [
+        "rb-002-ecc-degradation#symptoms",
+        "rb-002-ecc-degradation#escalation"
+      ],
+      "summary": "GPU 6 on a6dev-h100-node-04 showed accelerating correctable ECC errors (SBE) from 5-52 per 30 minutes, culminating in an uncorrectable error (DBE) with XID 48 (DBE ECC Error) at 2026-10-01T14:06:19Z. Telemetry confirms rising SBE rate (339 total over 3.5 hours) without thermal/power anomalies (temp \u226471\u00b0C, power \u2264680W). This matches runbook symptoms for ecc_degradation: correctable errors spiking to >50/30min followed by DBE/XID 48. No other hardware errors (XID, PCIe, NVLink) observed.",
+      "rationale": "GPU failed with uncorrectable ECC error (XID 48), requiring immediate workload migration to prevent job crashes. Runbook escalation states sev1 on DBE/XID 48.",
+      "steps": 5,
+      "tool_calls": 4,
+      "tool_errors": 1,
+      "text_tool_calls": 0,
+      "input_tokens": 36010,
+      "output_tokens": 6067,
+      "cost_usd": 0.0,
+      "latency_s": 193.184,
+      "root_cause_correct": true,
+      "action_correct": true,
+      "unsafe_action": false,
+      "missed_action": false,
+      "runbook_cited": true,
+      "citation_verdicts": [
+        {
+          "chunk_id": "rb-002-ecc-degradation#symptoms",
+          "supported": true,
+          "reason": "The passage explicitly describes the progression of ECC errors from correctable to uncorrectable, including the appearance of XID 48, which aligns with the diagnosis's description of the observed failure."
+        },
+        {
+          "chunk_id": "rb-002-ecc-degradation#escalation",
+          "supported": true,
+          "reason": "The passage explicitly states a severity 1 escalation for DBE errors, which aligns with the diagnosis's recommendation based on the observed DBE/XID 48 error."
+        }
+      ],
+      "citation_support": 1.0
+    },
+    {
+      "case_id": "a6dev/f009-thermal_runaway",
+      "incident_id": "2a6c585d-95f8-520c-93a0-474b33421a1f",
+      "truth": "thermal_runaway",
+      "is_fault": true,
+      "bmc_dropped": true,
+      "run_id": "9603a260-ae05-413f-9beb-eebec5875762",
+      "status": "succeeded",
+      "root_cause": "noisy_neighbor",
+      "confidence": 0.9,
+      "action": "none",
+      "cited_chunks": [
+        "rb-007-noisy-neighbor-triage#when-to-use-this",
+        "rb-007-noisy-neighbor-triage#what-to-do",
+        "rb-022-detector-alerts-guide#model-alerts"
+      ],
+      "summary": "GPUs 5-7 showed high temperature (avg 75\u00b0C, max 89\u00b0C) and thermal throttling (100+ throttled samples) due to high workload (620-660W power draw), but no hardware errors (XID, ECC, PCIe/NVLink errors, BMC faults) were observed. Neighboring GPUs (0-4) operated normally (31-70\u00b0C), confirming a workload shift (e.g., new job or noisy neighbor) rather than hardware failure. The thermal_residual (+13-14\u00b0C) and zscores were consistent with a workload change, not thermal runaway.",
+      "rationale": "No hardware errors observed; workload shift confirmed by thermal_residual, high power utilization, and normal neighbor GPU behavior. No action required beyond monitoring.",
+      "steps": 4,
+      "tool_calls": 3,
+      "tool_errors": 0,
+      "text_tool_calls": 1,
+      "input_tokens": 13928,
+      "output_tokens": 5455,
+      "cost_usd": 0.0,
+      "latency_s": 153.263,
+      "root_cause_correct": false,
+      "action_correct": false,
+      "unsafe_action": false,
+      "missed_action": true,
+      "runbook_cited": false,
+      "citation_verdicts": [
+        {
+          "chunk_id": "rb-007-noisy-neighbor-triage#when-to-use-this",
+          "supported": true,
+          "reason": "The passage explicitly describes the scenario of high utilization, power, and temperature without hardware errors, directly aligning with the diagnosis's description of GPUs 5-7."
+        },
+        {
+          "chunk_id": "rb-007-noisy-neighbor-triage#what-to-do",
+          "supported": true,
+          "reason": "The passage explicitly states that when a workload shift is confirmed, no hardware action is required, aligning with the diagnosis's recommendation of no action."
+        },
+        {
+          "chunk_id": "rb-022-detector-alerts-guide#model-alerts",
+          "supported": true,
+          "reason": "The passage explicitly mentions 'workload_shift' as a potential cause for temperature changes and links it to 'noisy neighbor' triage, aligning with the diagnosis's root cause."
+        }
+      ],
+      "citation_support": 1.0
+    },
+    {
+      "case_id": "a6dev/f014-nvlink_degradation",
+      "incident_id": "7e572b3c-2817-50fb-b13d-a35ad6dbcd3b",
+      "truth": "nvlink_degradation",
+      "is_fault": true,
+      "bmc_dropped": true,
+      "run_id": "3416275b-54a2-4b0e-be82-6d845e4c2782",
+      "status": "succeeded",
+      "root_cause": "noisy_neighbor",
+      "confidence": 0.9,
+      "action": "none",
+      "cited_chunks": [
+        "rb-007-noisy-neighbor-triage#when-to-use-this",
+        "rb-007-noisy-neighbor-triage#what-to-do"
+      ],
+      "summary": "GPU 2 showed high utilization (95-100%) and power (650-700W) from 12:09-12:35 UTC, but temperatures remained below slowdown limits (max 71.3\u00b0C) and no hardware errors (XID, ECC, PCIe/NVLink) were observed. The workload shift was confirmed by the detector's [workload_shift] signal (z=-4.1), matching the power draw. Runbook triage confirms this is a workload change (noisy neighbor), not a fault.",
+      "rationale": "No hardware errors detected; workload shift confirmed by telemetry and detector signal. Runbook states 'Workload shift confirmed: no hardware action'.",
+      "steps": 4,
+      "tool_calls": 3,
+      "tool_errors": 0,
+      "text_tool_calls": 0,
+      "input_tokens": 24897,
+      "output_tokens": 5589,
+      "cost_usd": 0.0,
+      "latency_s": 178.307,
+      "root_cause_correct": false,
+      "action_correct": false,
+      "unsafe_action": false,
+      "missed_action": true,
+      "runbook_cited": false,
+      "citation_verdicts": [
+        {
+          "chunk_id": "rb-007-noisy-neighbor-triage#when-to-use-this",
+          "supported": true,
+          "reason": "The passage explicitly describes a scenario of high utilization, power, and temperature without hardware errors, attributing it to a workload change like a noisy neighbor, which aligns with the diagnosis."
+        },
+        {
+          "chunk_id": "rb-007-noisy-neighbor-triage#what-to-do",
+          "supported": true,
+          "reason": "The passage explicitly states 'Workload shift confirmed: no hardware action,' which directly supports the diagnosis's recommended action of taking no action."
+        }
+      ],
+      "citation_support": 1.0
+    },
+    {
+      "case_id": "a6dev/f010-gpu_off_bus",
+      "incident_id": "a1377578-9e28-5616-b4f4-2ee2fdaa103d",
+      "truth": "gpu_off_bus",
+      "is_fault": true,
+      "bmc_dropped": true,
+      "run_id": "9a15300f-155e-4df3-b432-84b05a3dc0ec",
+      "status": "succeeded",
+      "root_cause": "gpu_off_bus",
+      "confidence": 0.95,
+      "action": "drain_node",
+      "cited_chunks": [
+        "rb-004-gpu-off-bus#symptoms",
+        "rb-004-gpu-off-bus#likely-causes",
+        "rb-004-gpu-off-bus#remediation"
+      ],
+      "summary": "GPU 0 fell off the bus (XID 79) at 2026-10-01T12:36:59Z, confirmed by telemetry loss (ev-1) and kernel log. Temperatures (max 65.9\u00b0C) and power (396W/400W) were within safe limits, ruling out thermal/power issues. No PCIe errors in BMC logs. Runbook confirms XID 79 symptoms match observed behavior.",
+      "rationale": "GPU fell off bus (XID 79) requires node drain per runbook remediation. GPU cannot recover while OS is running; reboot needed after drain.",
+      "steps": 4,
+      "tool_calls": 3,
+      "tool_errors": 0,
+      "text_tool_calls": 1,
+      "input_tokens": 20237,
+      "output_tokens": 3609,
+      "cost_usd": 0.0,
+      "latency_s": 113.698,
+      "root_cause_correct": true,
+      "action_correct": true,
+      "unsafe_action": false,
+      "missed_action": false,
+      "runbook_cited": true,
+      "citation_verdicts": [
+        {
+          "chunk_id": "rb-004-gpu-off-bus#symptoms",
+          "supported": true,
+          "reason": "The passage explicitly lists 'Kernel log: `NVRM: Xid (PCI:0000:xx:00): 79, GPU has fallen off the bus.`' as a symptom, directly supporting the diagnosis's root cause."
+        },
+        {
+          "chunk_id": "rb-004-gpu-off-bus#likely-causes",
+          "supported": true,
+          "reason": "The passage lists 'GPU fell off the bus (XID 79)' as a problem and provides potential causes, aligning with the diagnosis's root cause."
+        },
+        {
+          "chunk_id": "rb-004-gpu-off-bus#remediation",
+          "supported": true,
+          "reason": "The passage explicitly states that draining the node is the remediation for a GPU falling off the bus (XID 79), which aligns with the diagnosis's recommended action."
+        }
+      ],
+      "citation_support": 1.0
+    },
+    {
+      "case_id": "a6dev/f004-thermal_runaway",
+      "incident_id": "a5890a38-c348-5ef4-8d24-fde23e75090e",
+      "truth": "thermal_runaway",
+      "is_fault": true,
+      "bmc_dropped": false,
+      "run_id": "e0362786-962f-4e96-b383-9961e1b00ec2",
+      "status": "succeeded",
+      "root_cause": "thermal_runaway",
+      "confidence": 0.9,
+      "action": "drain_node",
+      "cited_chunks": [
+        "rb-001-thermal-runaway#symptoms",
+        "rb-001-thermal-runaway#likely-causes"
+      ],
+      "summary": "BMC log entry shows FAN3 sensor at 0 RPM (critical low threshold) at 15:55:09Z, causing thermal runaway. Affected GPUs (5-7) showed +11.8-12.9C thermal residuals above predicted temperature (ev-2,3,4), rising to 83-88C with thermal throttling (ev-10,12,18). Runbook confirms fan failure as likely cause for thermal runaway symptoms (rb-001-thermal-runaway#symptoms, rb-001-thermal-runaway#likely-causes).",
+      "rationale": "BMC fan failure (FAN3) caused thermal runaway; hardware failure requires node drain for human intervention.",
+      "steps": 3,
+      "tool_calls": 2,
+      "tool_errors": 0,
+      "text_tool_calls": 0,
+      "input_tokens": 8825,
+      "output_tokens": 5388,
+      "cost_usd": 0.0,
+      "latency_s": 144.359,
+      "root_cause_correct": true,
+      "action_correct": true,
+      "unsafe_action": false,
+      "missed_action": false,
+      "runbook_cited": true,
+      "citation_verdicts": [
+        {
+          "chunk_id": "rb-001-thermal-runaway#symptoms",
+          "supported": true,
+          "reason": "The passage explicitly lists a BMC SEL entry for a fan sensor crossing a critical low threshold (0 RPM) as a symptom of thermal runaway, which aligns with the diagnosis's summary."
+        },
+        {
+          "chunk_id": "rb-001-thermal-runaway#likely-causes",
+          "supported": true,
+          "reason": "The passage explicitly lists 'Failed or failing chassis fan' as a likely cause of thermal runaway, directly supporting the diagnosis's root cause."
+        }
+      ],
+      "citation_support": 1.0
+    },
+    {
+      "case_id": "a6dev/f015-thermal_runaway",
+      "incident_id": "2169c383-584f-58ff-ab30-27881b02323a",
+      "truth": "thermal_runaway",
+      "is_fault": true,
+      "bmc_dropped": false,
+      "run_id": "39b5d5a6-f112-461b-bac5-f8c3c4c18bef",
+      "status": "succeeded",
+      "root_cause": "unknown",
+      "confidence": 0.95,
+      "action": "drain_node",
+      "cited_chunks": [
+        "inc-2025000#report",
+        "inc-2025021#report",
+        "inc-2025035#report",
+        "inc-2025007#report"
+      ],
+      "summary": "BMC reported FAN4 failure (0 RPM) at 2026-10-01T16:32:59Z, triggering inlet temperature warning (36.5\u00b0C vs 35\u00b0C threshold) at 2026-10-01T16:49:59Z. GPU telemetry shows no thermal throttling (temps <35\u00b0C, power usage normal), but BMC logs and runbooks confirm similar incidents where fan failure caused thermal alerts. Resolution requires fan replacement per runbook examples.",
+      "rationale": "BMC logs confirm FAN4 failure (0 RPM) matching runbook patterns. Fan replacement required; drain_node is needed for hardware intervention (human approval required).",
+      "steps": 4,
+      "tool_calls": 3,
+      "tool_errors": 0,
+      "text_tool_calls": 0,
+      "input_tokens": 14220,
+      "output_tokens": 10098,
+      "cost_usd": 0.0,
+      "latency_s": 270.605,
+      "root_cause_correct": false,
+      "action_correct": true,
+      "unsafe_action": false,
+      "missed_action": false,
+      "runbook_cited": false,
+      "citation_verdicts": [
+        {
+          "chunk_id": "inc-2025000#report",
+          "supported": true,
+          "reason": "The passage describes a similar incident with a failed fan (FAN1 at 0 RPM) leading to thermal slowdown and requiring node draining for fan replacement, which aligns with the diagnosis's root cause and recommended action."
+        },
+        {
+          "chunk_id": "inc-2025021#report",
+          "supported": true,
+          "reason": "The passage describes a similar incident with a failed fan (FAN1 at 0 RPM) leading to thermal slowdown and requiring node draining for fan replacement, which aligns with the diagnosis's root cause and recommended action."
+        },
+        {
+          "chunk_id": "inc-2025035#report",
+          "supported": true,
+          "reason": "The passage describes a similar incident with a failed fan (FAN2) leading to thermal slowdown and requiring node draining for fan replacement, which aligns with the diagnosis's root cause and recommended action."
+        },
+        {
+          "chunk_id": "inc-2025007#report",
+          "supported": true,
+          "reason": "The passage describes a similar incident with FAN4 failure leading to thermal slowdown and requiring node draining for fan replacement, which aligns with the diagnosis's root cause, recommended action, and rationale."
+        }
+      ],
+      "citation_support": 1.0
+    },
+    {
+      "case_id": "a6dev/f005-gpu_off_bus",
+      "incident_id": "84ad392b-22d7-55e9-bd7c-f7f02d226677",
+      "truth": "gpu_off_bus",
+      "is_fault": true,
+      "bmc_dropped": true,
+      "run_id": "e9c802c0-7d37-44b2-89ec-8c42a77b1469",
+      "status": "succeeded",
+      "root_cause": "gpu_off_bus",
+      "confidence": 0.95,
+      "action": "drain_node",
+      "cited_chunks": [
+        "rb-004-gpu-off-bus#symptoms"
+      ],
+      "summary": "GPU 6 fell off the bus (XID 79) at 2026-10-01T16:58:59Z, confirmed by telemetry showing GPU 6 stopped reporting (samples=0) while other GPUs remained active. Temperatures (29-30\u00b0C) and power (55W) were normal, ruling out thermal or workload-related causes. Runbook confirms XID 79 symptoms match observed evidence.",
+      "rationale": "GPU is off the bus (XID 79), requiring node drain to prevent further job failures on this node.",
+      "steps": 5,
+      "tool_calls": 4,
+      "tool_errors": 1,
+      "text_tool_calls": 0,
+      "input_tokens": 22226,
+      "output_tokens": 4134,
+      "cost_usd": 0.0,
+      "latency_s": 125.998,
+      "root_cause_correct": true,
+      "action_correct": true,
+      "unsafe_action": false,
+      "missed_action": false,
+      "runbook_cited": true,
+      "citation_verdicts": [
+        {
+          "chunk_id": "rb-004-gpu-off-bus#symptoms",
+          "supported": true,
+          "reason": "The passage explicitly lists 'GPU has fallen off the bus' (XID 79) as a symptom, directly supporting the diagnosis's root cause and observed evidence."
+        }
+      ],
+      "citation_support": 1.0
+    },
+    {
+      "case_id": "a6dev/f006-power_fault",
+      "incident_id": "213adfef-866d-5cea-a359-1b07400c3c63",
+      "truth": "power_fault",
+      "is_fault": true,
+      "bmc_dropped": false,
+      "run_id": "2d668d47-f478-4142-bc4d-a34d69144abe",
+      "status": "succeeded",
+      "root_cause": "power_fault",
+      "confidence": 0.9,
+      "action": "monitor",
+      "cited_chunks": [
+        "rb-013-bmc-redfish-triage#interpreting-entries",
+        "rb-015-power-capping-policy#when-nodes-get-capped"
+      ],
+      "summary": "BMC log entry 'PSU3 Input lost' (ev-0) triggered automatic power capping (ev-1, ev-2, ev-3), reducing all GPUs' power limit from 700W to 420W. Runbook rb-013 confirms 'ResourceErrorsDetected on PSU' indicates a power supply problem (not hardware fault). No XID errors, ECC/PCIe/NVLink counters unchanged, and workload shift evidence (ev-20, ev-23, ev-28) aligns with reduced power draw. Root cause is PSU redundancy loss, not GPU failure.",
+      "rationale": "PSU issue detected (BMC log), but GPUs remain operational under reduced power. No hardware faults observed; monitor BMC logs for PSU resolution and verify power cap lifts after PSU recovery.",
+      "steps": 3,
+      "tool_calls": 2,
+      "tool_errors": 0,
+      "text_tool_calls": 0,
+      "input_tokens": 8454,
+      "output_tokens": 5075,
+      "cost_usd": 0.0,
+      "latency_s": 139.978,
+      "root_cause_correct": true,
+      "action_correct": false,
+      "unsafe_action": false,
+      "missed_action": true,
+      "runbook_cited": false,
+      "citation_verdicts": [
+        {
+          "chunk_id": "rb-013-bmc-redfish-triage#interpreting-entries",
+          "supported": true,
+          "reason": "The passage explicitly states that 'ResourceErrorsDetected' on a PSU indicates a power supply problem, directly supporting the diagnosis's root cause of a power fault."
+        },
+        {
+          "chunk_id": "rb-015-power-capping-policy#when-nodes-get-capped",
+          "supported": true,
+          "reason": "The passage explicitly states that power capping occurs automatically when PSU redundancy is lost, which aligns with the diagnosis's root cause of power fault due to PSU redundancy loss."
+        }
+      ],
+      "citation_support": 1.0
+    },
+    {
+      "case_id": "a6dev/f019-noisy_neighbor",
+      "incident_id": "4001d459-7620-5198-81dd-2556c9594668",
+      "truth": "noisy_neighbor",
+      "is_fault": false,
+      "bmc_dropped": true,
+      "run_id": "b3f3758c-a527-43e8-bf7d-2dd36c699e4f",
+      "status": "succeeded",
+      "root_cause": "noisy_neighbor",
+      "confidence": 0.9,
+      "action": "none",
+      "cited_chunks": [
+        "rb-007-noisy-neighbor-triage#what-to-do",
+        "rb-022-detector-alerts-guide#model-alerts"
+      ],
+      "summary": "GPU 6 was flagged by the detector for high temp, power, and utilization (z-scores +6.1, +4.7, +4.8), but metrics show GPU 6 has low values (temp_avg_c=43.2, power_avg_w=196, util_avg_pct=41) compared to neighbors (temp_avg_c=63-66, power_avg_w=375-389, util_avg_pct=92-97). No XID errors or BMC logs detected (get_logs returned empty). Runbook confirms workload shift (rb-007-noisy-neighbor-triage#what-to-do) as the cause, with no hardware action required.",
+      "rationale": "No hardware errors detected; workload shift confirmed by runbook. No action needed per runbook guidance.",
+      "steps": 4,
+      "tool_calls": 3,
+      "tool_errors": 0,
+      "text_tool_calls": 0,
+      "input_tokens": 12749,
+      "output_tokens": 7364,
+      "cost_usd": 0.0,
+      "latency_s": 199.205,
+      "root_cause_correct": true,
+      "action_correct": true,
+      "unsafe_action": false,
+      "missed_action": false,
+      "runbook_cited": true,
+      "citation_verdicts": [
+        {
+          "chunk_id": "rb-007-noisy-neighbor-triage#what-to-do",
+          "supported": true,
+          "reason": "The passage explicitly states that when a workload shift is confirmed, no hardware action is required, directly supporting the diagnosis's recommended action of 'none'."
+        },
+        {
+          "chunk_id": "rb-022-detector-alerts-guide#model-alerts",
+          "supported": true,
+          "reason": "The passage explicitly mentions 'workload shift' as a cause for temperature, power, or utilization changes, aligning with the diagnosis's root cause."
+        }
+      ],
+      "citation_support": 1.0
+    },
+    {
+      "case_id": "a6dev/f007-noisy_neighbor",
+      "incident_id": "7fac8c38-6ebb-5e37-92b2-47552404fa1a",
+      "truth": "noisy_neighbor",
+      "is_fault": false,
+      "bmc_dropped": false,
+      "run_id": "cbaf2c09-50f7-4741-962c-b7c23660dd1c",
+      "status": "succeeded",
+      "root_cause": "noisy_neighbor",
+      "confidence": 0.9,
+      "action": "monitor",
+      "cited_chunks": [
+        "rb-007-noisy-neighbor-triage#when-to-use-this"
+      ],
+      "summary": "GPU 7 showed a sudden spike in power (392W), utilization (99%), and temperature (63.7\u00b0C) between 17:22-17:27 UTC, consistent with a workload shift. No hardware errors (XID, ECC, PCIe/NVLink, BMC logs) were observed. The metrics align with the runbook's description of a 'noisy neighbor' (workload change, not hardware fault).",
+      "rationale": "No hardware faults detected; the spike is consistent with a workload change. Monitor for recurrence but no action needed.",
+      "steps": 4,
+      "tool_calls": 3,
+      "tool_errors": 0,
+      "text_tool_calls": 1,
+      "input_tokens": 24877,
+      "output_tokens": 4791,
+      "cost_usd": 0.0,
+      "latency_s": 152.868,
+      "root_cause_correct": true,
+      "action_correct": true,
+      "unsafe_action": false,
+      "missed_action": false,
+      "runbook_cited": true,
+      "citation_verdicts": [
+        {
+          "chunk_id": "rb-007-noisy-neighbor-triage#when-to-use-this",
+          "supported": true,
+          "reason": "The passage explicitly describes the observed symptoms (high utilization, power, temperature, no hardware errors) as indicative of a workload change, aligning with the diagnosis of a noisy neighbor."
+        }
+      ],
+      "citation_support": 1.0
+    },
+    {
+      "case_id": "a6devnn/f001-noisy_neighbor",
+      "incident_id": "1a8a2773-2887-5c23-9500-50914cadaca8",
+      "truth": "noisy_neighbor",
+      "is_fault": false,
+      "bmc_dropped": true,
+      "run_id": "bb7ad75c-6b32-4bf1-9566-c5519b300e99",
+      "status": "succeeded",
+      "root_cause": "noisy_neighbor",
+      "confidence": 0.9,
+      "action": "none",
+      "cited_chunks": [
+        "rb-007-noisy-neighbor-triage#what-to-do",
+        "rb-022-detector-alerts-guide#model-alerts"
+      ],
+      "summary": "GPU 0 and 5 showed high power (329W/317W avg) and utilization (41%/39% avg) with z-scores of +6.7/+6.9, consistent with workload shift. No hardware errors (XID, ECC, BMC logs empty), temperatures within normal range (max 72.6\u00b0C/71.4\u00b0C), and no throttling beyond normal for workload. Matches runbook criteria for noisy neighbor: high power/utilization explained by workload, no fault indicators.",
+      "rationale": "Workload shift confirmed; no hardware errors or thermal faults. No action required per runbook guidance.",
+      "steps": 4,
+      "tool_calls": 3,
+      "tool_errors": 0,
+      "text_tool_calls": 1,
+      "input_tokens": 12729,
+      "output_tokens": 6771,
+      "cost_usd": 0.0,
+      "latency_s": 182.316,
+      "root_cause_correct": true,
+      "action_correct": true,
+      "unsafe_action": false,
+      "missed_action": false,
+      "runbook_cited": true,
+      "citation_verdicts": [
+        {
+          "chunk_id": "rb-007-noisy-neighbor-triage#what-to-do",
+          "supported": true,
+          "reason": "The passage explicitly states that when a workload shift is confirmed, no hardware action is required, aligning with the diagnosis's recommendation of no action."
+        },
+        {
+          "chunk_id": "rb-022-detector-alerts-guide#model-alerts",
+          "supported": true,
+          "reason": "The passage explicitly mentions `[workload_shift]` as a change in utilization explained by power draw, aligning with the diagnosis's root cause and summary."
+        }
+      ],
+      "citation_support": 1.0
+    }
+  ]
+}

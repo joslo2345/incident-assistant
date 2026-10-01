@@ -319,3 +319,32 @@ Running log of design choices: what was chosen, what was rejected, and why.
   `cost_usd` is 0 by construction and tokens and latency are the numbers to watch.
 - **Watcher investigates new live incidents** (sev1–3, once each), one at a time: a local model
   serves one request at a time anyway.
+
+## 2026-10-01 · A6 · Evaluation harness
+
+- **Sets built from injected faults, one case per fault.** Labels come from the injector's ground
+  truth plus a per-type policy read off the runbooks' remediation sections (`POLICY` in
+  `harness/src/evaluation/sets.py`): the runbook to cite and the actions it allows. Example: after
+  XID 79 only a drain is allowed, because the runbook says a GPU reset is not enough.
+- **Decoys added from decoy-only replays.** The detector correctly opens no incident for most
+  noisy-neighbor decoys, so a plain replay left the held-out set with none and the unsafe-action
+  rate unmeasurable. The decoys that *do* reach the agent (the hard ones) fill each set to 25.
+- **dev / held-out test, 25 each, new seeds** (51/61 dev, 53/63 test, 7 CI). Rounds are tuned on
+  dev only; test is scored at the start and the end. Smaller than the plan's 50-100 because the
+  local model takes ~2.5 min per incident; noise is measured by running the baseline twice.
+- **Missed actions are a first-class metric**, next to unsafe actions: a real fault answered with
+  "none" or "monitor" stays in service. The A5 baseline showed this is the agent's main failure.
+- **Fresh in-memory approvals per eval case.** With the real table, a drain filed in one round
+  appears in the next round's `get_node_inventory`, and the agent would see its own earlier
+  request.
+- **Judge: Gemma 3 12B**, a different family from the agent, scores only citation support.
+  Calibrated against blind hand grades (41 pairs, 20 incidents; graded by Claude as a stand-in,
+  by the user's choice). v1 was lenient (kappa 0.31; 7 of 9 disagreements "supported"). v2 was
+  written from the disagreements on incidents 1-10 only and measured on 11-20: kappa 0.00 to 0.60.
+  A rule suggested by a held-out case was deliberately left out of v2.
+- **CI replays recorded model replies** through the real stack. Timestamps in recorded tool
+  arguments are stored as offsets from the incident's first signal, because CI replays the data
+  relative to "now". The gate fails on a failed run, more tool errors, or lower scores than the
+  recording.
+- **Reports are tagged** with the commit, a dirty flag, the model, a hash of the system prompt and
+  the judge version, so every number in RESULTS.md can be traced to the code that produced it.

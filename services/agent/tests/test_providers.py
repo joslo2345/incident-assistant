@@ -172,7 +172,7 @@ async def test_openai_compat_recovers_tool_calls_written_as_text(content: str) -
     assert turn.tool_calls[0].id.startswith("text_")
     # The transcript records a real tool call, so the tool result that follows pairs with it.
     assistant = session.messages[-1]  # type: ignore[attr-defined]
-    assert assistant["content"] is None
+    assert assistant["content"] == ""
     assert assistant["tool_calls"][0]["id"] == turn.tool_calls[0].id
 
 
@@ -189,3 +189,12 @@ async def test_openai_compat_leaves_other_text_alone(content: str) -> None:
     fake = FakeOpenAI(completion({"content": content}, finish="stop"))
     turn = await openai_provider(fake).start("s", "u").next([SPEC, SUBMIT_SPEC])
     assert turn.tool_calls == [] and turn.stop_reason == "end_turn" and turn.text == content
+
+
+async def test_openai_compat_never_sends_null_content() -> None:
+    # The model spent max_tokens on reasoning: no text, no tool calls.
+    fake = FakeOpenAI(completion({"content": None, "reasoning": "long..."}, finish="length"))
+    session = openai_provider(fake).start("s", "u")
+    turn = await session.next([SPEC])
+    assert turn.stop_reason == "max_tokens" and turn.tool_calls == []
+    assert session.messages[-1] == {"role": "assistant", "content": ""}  # type: ignore[attr-defined]

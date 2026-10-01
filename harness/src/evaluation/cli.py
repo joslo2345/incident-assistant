@@ -74,7 +74,7 @@ async def _run(args: argparse.Namespace) -> int:
         if args.record:
             cassette = Cassette(recorded_with={"model": provider.model})
             provider = RecordingProvider(provider, cassette)
-    judge = Judge(args.judge_model) if args.judge else None
+    judge = Judge(args.judge_model, prompt=args.judge_prompt) if args.judge else None
     label = args.label or ("replay" if args.replay else None)
     async with open_runtime(Settings.from_env(), provider) as rt:
         from evaluation.runner import git_state
@@ -120,10 +120,50 @@ def _check_gate(summary: dict[str, Any], expected: dict[str, Any]) -> int:
     return 0
 
 
+async def _rejudge(args: argparse.Namespace) -> int:
+    """Re-run only the judge over a report's citations (no agent runs) with another prompt."""
+    from urllib.parse import quote
+
+    import httpx2
+
+    from evaluation.judge import Judge, diagnosis_text
+    from evaluation.runner import load_local_env
+
+    load_local_env()
+    import os
+
+    report = _load(args.report)
+    judge = Judge(args.judge_model, prompt=args.prompt)
+    async with httpx2.AsyncClient(
+        base_url=os.environ["KNOWLEDGE_URL"],
+        headers={"X-API-Key": os.environ["KNOWLEDGE_API_KEY"]}, timeout=15,
+    ) as client:  # fmt: skip
+        for c in report["cases"]:
+            if not c["root_cause"]:
+                continue
+            text = diagnosis_text(c["root_cause"], c["summary"], c["action"], c["rationale"])
+            verdicts = []
+            for chunk_id in c["cited_chunks"]:
+                r = await client.get(f"/v1/chunks/{quote(chunk_id, safe='')}")
+                r.raise_for_status()
+                v = await judge.judge(text, chunk_id, r.json()["text"])
+                verdicts.append({"chunk_id": chunk_id, "supported": v.supported,
+                                 "reason": v.reason})  # fmt: skip
+            c["citation_verdicts"] = verdicts
+            n = len(verdicts)
+            c["citation_support"] = sum(v["supported"] for v in verdicts) / n if n else None
+    supports = [c["citation_support"] for c in report["cases"] if c["citation_support"] is not None]
+    report["summary"]["citation_support"] = round(sum(supports) / len(supports), 3)
+    report["meta"]["judge"] = f"{args.judge_model} (prompt {args.prompt})"
+    Path(args.out).write_text(json.dumps(report, indent=2, default=str) + "\n")
+    print(f"citation support {report['summary']['citation_support']:.0%}; wrote {args.out}")
+    return 0
+
+
 def _calibrate(args: argparse.Namespace) -> int:
     from evaluation.calibrate import calibrate
 
-    result = calibrate(_load(args.report))
+    result = calibrate(_load(args.report), incidents=args.incidents)
     print(json.dumps(result, indent=2))
     if args.out:
         Path(args.out).write_text(json.dumps(result, indent=2) + "\n")
@@ -200,6 +240,7 @@ def build_parser() -> argparse.ArgumentParser:
     r.add_argument("--label", help="report name (default: git commit)")
     r.add_argument("--judge", action="store_true", help="judge citation support")
     r.add_argument("--judge-model", default="gemma3:12b")
+    r.add_argument("--judge-prompt", default="v2", choices=["v1", "v2"])
     r.add_argument("--limit", type=int)
     r.add_argument("--out", help="report directory (default eval/reports/a6/<set>)")
     mode = r.add_mutually_exclusive_group()
@@ -209,6 +250,12 @@ def build_parser() -> argparse.ArgumentParser:
     c = sub.add_parser("calibrate", help="Judge agreement with hand grades")
     c.add_argument("report")
     c.add_argument("--out")
+    c.add_argument("--incidents", help="slice of graded incidents, e.g. 0:10 or 10:20")
+    rj = sub.add_parser("rejudge", help="Re-run only the judge over a report's citations")
+    rj.add_argument("report")
+    rj.add_argument("--prompt", default="v2", choices=["v1", "v2"])
+    rj.add_argument("--judge-model", default="gemma3:12b")
+    rj.add_argument("--out", required=True)
     sh = sub.add_parser("sheet", help="Blind grading sheet (no judge verdicts) for hand grades")
     sh.add_argument("report")
     sh.add_argument("--n", type=int, default=20)
@@ -229,6 +276,8 @@ def main() -> None:
         sys.exit(asyncio.run(_run(args)))
     if args.command == "calibrate":
         sys.exit(_calibrate(args))
+    if args.command == "rejudge":
+        sys.exit(asyncio.run(_rejudge(args)))
     if args.command == "sheet":
         sys.exit(asyncio.run(_sheet(args)))
     sys.exit(_compare(args))

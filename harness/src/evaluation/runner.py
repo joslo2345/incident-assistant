@@ -154,7 +154,7 @@ async def run_set(
             "provider": provider.name,
             "model": provider.model,
             "prompt_sha": PROMPT_SHA,
-            "judge": opts.judge.model if opts.judge else None,
+            "judge": f"{opts.judge.model} ({opts.judge.prompt_version})" if opts.judge else None,
             "started_at": started.isoformat(timespec="seconds"),
             "finished_at": datetime.now(UTC).isoformat(timespec="seconds"),
             "composition": composition(chosen),

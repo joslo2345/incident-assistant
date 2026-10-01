@@ -33,6 +33,35 @@ Judge only the passage against the diagnosis. Do not judge whether the diagnosis
 
 Reply with JSON: {"supported": true or false, "reason": "<one sentence>"}"""
 
+# v2, written from v1's disagreements with hand grades on incidents 1-10 of the dev baseline
+# only (f021: a passage pointing to the opposite conclusion; f016: a how-to section). Incidents
+# 11-20 are held out to measure it.
+JUDGE_PROMPT_V2 = """\
+You check citations in incident diagnoses written for GPU datacenter operators.
+
+You get a diagnosis (root cause, summary, recommended action and its rationale) and ONE passage \
+that the diagnosis cites. Decide whether the passage supports the diagnosis.
+
+Answer supported=true only if the passage states facts that back what the diagnosis concludes:
+- symptoms or causes that match the observations in the summary AND point to the stated root \
+cause, or
+- a remediation or policy that backs the recommended action for that root cause.
+
+Answer supported=false if any of these hold:
+- The passage only explains how to check or measure something (commands, procedures) without \
+stating facts the conclusion relies on.
+- The passage points to a different conclusion than the diagnosis draws. For example: it says a \
+signal is a warning sign, but the diagnosis calls that signal harmless or takes no action; or it \
+links the observations to a different failure type.
+- It only shares keywords or is generic.
+
+Check direction and conclusion, not just topic. Judge the passage against the diagnosis; do not \
+judge whether the diagnosis itself is right.
+
+Reply with JSON: {"supported": true or false, "reason": "<one sentence>"}"""
+
+PROMPTS = {"v1": JUDGE_PROMPT, "v2": JUDGE_PROMPT_V2}
+
 VERDICT_SCHEMA: dict[str, Any] = {
     "type": "object",
     "properties": {"supported": {"type": "boolean"}, "reason": {"type": "string"}},
@@ -60,8 +89,11 @@ class Judge:
         model: str = DEFAULT_JUDGE,
         base_url: str = "http://127.0.0.1:11434/v1",
         client: openai.AsyncOpenAI | None = None,
+        prompt: str = "v2",
     ) -> None:
         self.model = model
+        self.prompt_version = prompt
+        self.prompt = PROMPTS[prompt]
         self.client = client or openai.AsyncOpenAI(
             base_url=base_url, api_key="not-needed", timeout=180, max_retries=1
         )
@@ -75,7 +107,7 @@ class Judge:
                 "json_schema": {"name": "verdict", "schema": VERDICT_SCHEMA},
             },
             messages=[
-                {"role": "system", "content": JUDGE_PROMPT},
+                {"role": "system", "content": self.prompt},
                 {
                     "role": "user",
                     "content": f"<diagnosis>\n{diagnosis}\n</diagnosis>\n\n"
