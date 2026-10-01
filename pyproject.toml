@@ -20,7 +20,7 @@ dev = [
 package = false
 
 [tool.uv.workspace]
-members = ["libs/*", "services/ingest", "services/consumer", "services/detector", "services/knowledge", "services/agent", "evaluation", "replayer"]
+members = ["libs/*", "services/ingest", "services/consumer", "services/detector", "services/knowledge", "services/agent", "harness", "replayer"]
 
 [tool.uv.sources]
 incident-contracts = { workspace = true }
@@ -45,7 +45,7 @@ strict = true
 plugins = ["pydantic.mypy"]
 
 [tool.pytest.ini_options]
-testpaths = ["libs", "services", "evaluation", "replayer", "tests"]
+testpaths = ["libs", "services", "harness", "replayer", "tests"]
 # Shared test helpers live in uniquely named modules on this path (test dirs aren't packages).
 pythonpath = ["services/detector/tests", "services/knowledge/tests", "services/agent/tests"]
 addopts = "--import-mode=importlib"

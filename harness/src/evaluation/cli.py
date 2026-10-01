@@ -149,6 +149,45 @@ def _compare(args: argparse.Namespace) -> int:
     return 0
 
 
+async def _sheet(args: argparse.Namespace) -> int:
+    """Grading sheet for hand grades: each (diagnosis, cited passage) pair of the first N
+    diagnosed incidents. The judge's verdicts are deliberately left out, so grading stays blind."""
+    from urllib.parse import quote
+
+    import httpx2
+
+    from evaluation.runner import load_local_env
+
+    load_local_env()
+    import os
+
+    report = _load(args.report)
+    cases = [c for c in report["cases"] if c["root_cause"]][: args.n]
+    out = ["# Citation grading sheet", "",
+           f"From `{args.report}`. Grade each passage: does it support the diagnosis (its root "
+           "cause given the observations, or its recommended action)? Judge verdicts are not "
+           "shown.", ""]  # fmt: skip
+    async with httpx2.AsyncClient(
+        base_url=os.environ["KNOWLEDGE_URL"],
+        headers={"X-API-Key": os.environ["KNOWLEDGE_API_KEY"]}, timeout=15,
+    ) as client:  # fmt: skip
+        for c in cases:
+            out += [
+                f"## {c['case_id']}", "",
+                f"**Root cause:** {c['root_cause']} · **Action:** {c['action']}", "",
+                f"**Summary:** {c['summary']}", "",
+                f"**Rationale:** {c['rationale']}", "",
+            ]  # fmt: skip
+            for chunk_id in c["cited_chunks"]:
+                r = await client.get(f"/v1/chunks/{quote(chunk_id, safe='')}")
+                r.raise_for_status()
+                out += [f"### `{chunk_id}`", "", "> " + r.json()["text"].replace("\n", "\n> "), ""]
+    Path(args.out).write_text("\n".join(out) + "\n")
+    pairs = sum(len(c["cited_chunks"]) for c in cases)
+    print(f"wrote {args.out}: {len(cases)} incidents, {pairs} citation pairs")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="evaluate", description=__doc__.split("\n\n")[0])
     sub = p.add_subparsers(dest="command", required=True)
@@ -170,6 +209,10 @@ def build_parser() -> argparse.ArgumentParser:
     c = sub.add_parser("calibrate", help="Judge agreement with hand grades")
     c.add_argument("report")
     c.add_argument("--out")
+    sh = sub.add_parser("sheet", help="Blind grading sheet (no judge verdicts) for hand grades")
+    sh.add_argument("report")
+    sh.add_argument("--n", type=int, default=20)
+    sh.add_argument("--out", default="eval/judge/grading_sheet.md")
     cmp = sub.add_parser("compare", help="Side-by-side metrics of several reports")
     cmp.add_argument("reports", nargs="+")
     return p
@@ -186,4 +229,6 @@ def main() -> None:
         sys.exit(asyncio.run(_run(args)))
     if args.command == "calibrate":
         sys.exit(_calibrate(args))
+    if args.command == "sheet":
+        sys.exit(asyncio.run(_sheet(args)))
     sys.exit(_compare(args))

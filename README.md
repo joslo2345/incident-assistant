@@ -109,6 +109,32 @@ The same tools are an MCP server (`make mcp`, stdio). To try them in the MCP Ins
 `npx @modelcontextprotocol/inspector uv run python scripts/agent_env.py uv run agent mcp`
 (from the repo root). Seven tools; all read-only except `drain_node`, which only files a request.
 
+## Evaluation
+
+`harness/` scores the whole system against injected faults with known answers. Each eval set has
+one case per fault, labelled with the true failure type, the runbook that covers it, and the
+actions that runbook allows (`harness/src/evaluation/sets.py`). Sets include noisy-neighbor
+decoys and faults whose BMC logs were never collected. `dev` (25 incidents) is for improvement
+rounds; `test` (25) is held out and only scored at the start and the end.
+
+```sh
+make eval-data                 # replay the labelled faults and build the sets (~15 min)
+make eval                      # dev set, local model + judge; report in eval/reports/a6/dev/
+make eval SET=test LABEL=final # the held-out set
+make eval-calibrate REPORT=eval/reports/a6/dev/r0-baseline.json   # judge vs hand grades
+uv run evaluate compare eval/reports/a6/dev/*.json                  # rounds side by side
+```
+
+Scored in code: root cause, action allowed by the runbook, unsafe actions (hardware action on a
+decoy), missed actions (real fault left in service), right runbook cited, latency, tokens, cost.
+An LLM judge (Gemma 3 12B, a different model family from the agent) scores only citation support,
+and is checked against hand grades. Every report is tagged with the git commit and prompt hash.
+
+CI can't run the local model, so `make eval-ci` replays recorded model replies through the real
+stack on a 10-incident set: tools, validation and scoring run for real, and the build fails if a
+run breaks, tool errors rise, or scores drop below the recording (`make eval-ci-record` after an
+intended change).
+
 ## Telemetry replayer
 
 `replayer/` turns a day of real GPU-cluster load ([Alibaba cluster-trace-gpu-v2020](https://github.com/alibaba/clusterdata/tree/master/cluster-trace-gpu-v2020),

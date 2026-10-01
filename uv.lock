@@ -584,7 +584,7 @@ requires-dist = [
     { name = "incident-consumer", editable = "services/consumer" },
     { name = "incident-contracts", editable = "libs/contracts" },
     { name = "incident-detector", editable = "services/detector" },
-    { name = "incident-eval", editable = "evaluation" },
+    { name = "incident-eval", editable = "harness" },
     { name = "incident-ingest", editable = "services/ingest" },
     { name = "incident-knowledge", editable = "services/knowledge" },
     { name = "incident-replayer", extras = ["prepare"], editable = "replayer" },
@@ -650,7 +650,7 @@ requires-dist = [
 [[package]]
 name = "incident-eval"
 version = "0.1.0"
-source = { editable = "evaluation" }
+source = { editable = "harness" }
 dependencies = [
     { name = "asyncpg" },
     { name = "incident-agent" },
