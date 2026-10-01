@@ -1,29 +1,37 @@
 """Telemetry ingestion API.
 
-Validates and authenticates batches, drops events whose event_id was seen recently, and hands
-the rest to a bounded sink. A full sink means 429 with Retry-After. A2 points the sink at Kafka.
+Validates and authenticates batches, drops events whose event_id was seen recently, and publishes
+the rest to Kafka. It returns 202 only once Kafka has acknowledged every event. Too many events in
+flight means 429; a Kafka failure means 503. Either way the client retries the identical batch.
 """
 
-import asyncio
 import contextlib
 import secrets
-from collections.abc import AsyncIterator
+import time
+from collections.abc import AsyncIterator, Awaitable, Callable
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import Depends, FastAPI, status
+from fastapi import Depends, FastAPI, Response, status
 from fastapi.responses import JSONResponse
 from fastapi.security import APIKeyHeader
+from prometheus_client import CONTENT_TYPE_LATEST, Counter, Gauge, Histogram, generate_latest
 from starlette.requests import Request
 
 from incident_contracts import SCHEMA_VERSION, TelemetryBatch, TelemetryEvent
 from incident_contracts.api import ErrorResponse, HealthResponse, IngestResponse
 from ingest.dedupe import RecentIds
+from ingest.publisher import KafkaPublisher, MemoryPublisher, Publisher, PublishError
 from ingest.settings import Settings
-from ingest.sink import BufferedSink
 
 API_KEY_HEADER = "X-API-Key"
 _api_key_header = APIKeyHeader(name=API_KEY_HEADER, auto_error=False)
+
+REQUESTS = Counter("ingest_requests_total", "HTTP requests", ["path", "status"])
+REQUEST_SECONDS = Histogram("ingest_request_seconds", "HTTP request latency", ["path"])
+EVENTS = Counter("ingest_events_total", "Events received", ["result"])
+PUBLISH_SECONDS = Histogram("ingest_publish_seconds", "Time for Kafka to acknowledge a batch")
+IN_FLIGHT = Gauge("ingest_in_flight_events", "Events being published right now")
 
 
 class ApiError(Exception):
@@ -50,18 +58,23 @@ def require_api_key(
     return key
 
 
-def create_app(settings: Settings | None = None) -> FastAPI:
+def create_app(settings: Settings | None = None, publisher: Publisher | None = None) -> FastAPI:
     settings = settings or Settings.from_env()
-    sink = BufferedSink(capacity=settings.queue_capacity)
+    if publisher is None:
+        publisher = (
+            KafkaPublisher(settings.kafka_bootstrap, settings.kafka_topic)
+            if settings.kafka_bootstrap
+            else MemoryPublisher()
+        )
     recent = RecentIds(ttl_s=settings.dedupe_ttl_s, max_ids=settings.dedupe_max_ids)
+    in_flight = 0
+    retry_headers = {"Retry-After": str(settings.retry_after_s)}
 
     @contextlib.asynccontextmanager
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
-        drain = asyncio.create_task(sink.run())
+        await publisher.start()
         yield
-        drain.cancel()
-        with contextlib.suppress(asyncio.CancelledError):
-            await drain
+        await publisher.stop()
 
     app = FastAPI(
         title="Incident Assistant: Telemetry Ingestion API",
@@ -71,8 +84,20 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         lifespan=lifespan,
     )
     app.state.settings = settings
-    app.state.sink = sink
+    app.state.publisher = publisher
     app.state.recent_ids = recent
+
+    @app.middleware("http")
+    async def _metrics(
+        request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:
+        started = time.perf_counter()
+        response = await call_next(request)
+        route = request.scope.get("route")
+        path = getattr(route, "path", "unmatched")
+        REQUEST_SECONDS.labels(path).observe(time.perf_counter() - started)
+        REQUESTS.labels(path, str(response.status_code)).inc()
+        return response
 
     @app.exception_handler(ApiError)
     async def _api_error_handler(_: Request, exc: ApiError) -> JSONResponse:
@@ -90,30 +115,64 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 "model": ErrorResponse,
                 "description": "Overloaded; retry after the number of seconds in Retry-After",
             },
+            503: {
+                "model": ErrorResponse,
+                "description": "Stream unavailable; retry after the number of seconds in "
+                "Retry-After",
+            },
         },
         summary="Ingest a batch of telemetry events",
+        description="202 means every new event is durably stored in the stream.",
     )
     async def ingest_telemetry(
         batch: TelemetryBatch, _: Annotated[str, Depends(require_api_key)]
     ) -> IngestResponse:
+        nonlocal in_flight
         fresh: dict[UUID, TelemetryEvent] = {}
         for event in batch.events:
             if event.event_id not in recent and event.event_id not in fresh:
                 fresh[event.event_id] = event
-        # Only remember IDs once they're buffered; a 429'd batch must be retryable as-is.
-        if not sink.try_put(list(fresh.values())):
-            raise ApiError(
-                status.HTTP_429_TOO_MANY_REQUESTS,
-                "overloaded",
-                "Ingestion queue is full; retry later",
-                headers={"Retry-After": str(settings.retry_after_s)},
-            )
-        recent.add_all(fresh)
-        return IngestResponse(accepted=len(fresh), duplicates=len(batch.events) - len(fresh))
+        duplicates = len(batch.events) - len(fresh)
+
+        if fresh:
+            if in_flight + len(fresh) > settings.max_in_flight:
+                raise ApiError(
+                    status.HTTP_429_TOO_MANY_REQUESTS,
+                    "overloaded",
+                    "Too many events in flight; retry later",
+                    headers=retry_headers,
+                )
+            in_flight += len(fresh)
+            IN_FLIGHT.set(in_flight)
+            started = time.perf_counter()
+            try:
+                await publisher.publish(list(fresh.values()))
+            except PublishError as exc:
+                # Nothing is remembered, so the retried batch is accepted in full. Events that did
+                # reach Kafka before the failure are deduplicated by the consumer's insert.
+                raise ApiError(
+                    status.HTTP_503_SERVICE_UNAVAILABLE,
+                    "unavailable",
+                    f"Stream unavailable: {exc}",
+                    headers=retry_headers,
+                ) from exc
+            finally:
+                in_flight -= len(fresh)
+                IN_FLIGHT.set(in_flight)
+            PUBLISH_SECONDS.observe(time.perf_counter() - started)
+            recent.add_all(fresh)
+
+        EVENTS.labels("accepted").inc(len(fresh))
+        EVENTS.labels("duplicate").inc(duplicates)
+        return IngestResponse(accepted=len(fresh), duplicates=duplicates)
 
     @app.get("/healthz", response_model=HealthResponse, summary="Liveness check")
     async def healthz() -> HealthResponse:
         return HealthResponse()
+
+    @app.get("/metrics", include_in_schema=False)
+    async def metrics() -> Response:
+        return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
     return app
 

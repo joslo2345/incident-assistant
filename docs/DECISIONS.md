@@ -134,3 +134,56 @@ Running log of design choices: what was chosen, what was rejected, and why.
   In A2 the sink becomes a Kafka producer.
 - **Replayer retries** 429 (honoring Retry-After), 5xx and network errors with exponential
   backoff and full jitter, always resending the identical batch. It doesn't retry 401/422.
+
+## 2026-10-01 · A2 · 202 means durable in Kafka
+
+- **Chose:** the ingest API awaits Kafka acknowledgement (`acks=all`, idempotent producer) for
+  every event before answering 202. Backpressure became a limit on events in flight (429), and a
+  Kafka failure returns 503 with `Retry-After`; the replayer already retries both.
+- **Rejected:** A1's in-memory buffer drained in the background. It was faster (65k vs 34k
+  events/s), but a crash of the API process lost events that clients had been told were accepted.
+- **Why:** "accepted" should mean "will be stored". Halving peak throughput still leaves about 50x
+  headroom over the fastest replay we use.
+
+## 2026-10-01 · A2 · At-least-once consumer, idempotent inserts
+
+- **Chose:** the consumer commits Kafka offsets only after the database transaction commits. Rows go
+  in by COPY to a temp table, then `INSERT ... ON CONFLICT DO NOTHING` on a unique `(event_id, time)`
+  index. A crash anywhere means redelivery, and redelivered rows are no-ops.
+- **Rejected:** Kafka transactions / exactly-once semantics (they don't cover the database write
+  anyway); auto-commit (it can commit before the write and lose data).
+- **Why:** this is the standard pattern and it's provable. Integration tests SIGKILL the consumer
+  mid-replay and force redelivery by rewinding offsets; both end with rows = accepted events.
+- **Database errors** are retried indefinitely without committing (falling behind beats losing
+  data). **Invalid messages** go to `telemetry.dlq` with the validation error as a header, so one bad
+  event can't block a partition.
+- With this in place, the API's in-memory dedupe cache is just an optimization that keeps
+  duplicates off the stream.
+
+## 2026-10-01 · A2 · TimescaleDB layout
+
+- **One hypertable per event type** (`gpu_metrics`, `xid_events`, `bmc_log`). A wide typed table
+  for metrics, rather than a generic (name, value) table, keeps queries and compression simple.
+- **Rollups:** `gpu_metrics_1m` (continuous aggregate) and `gpu_metrics_1h` (hierarchical, built on
+  the 1m one with sample-weighted averages). Both have real-time aggregation on.
+- **Late data bug, found and fixed (migration 003):** the refresh window was 2 hours, so backfilled
+  or late data never reached the rollups. Real-time aggregation only covers data *newer* than
+  the watermark. Widened the window to 14 days (= raw retention); refreshes only recompute changed
+  buckets. Lesson: test with late data, not just "now".
+- **Compression** after 2 days (segmented by GPU); **retention**: raw 14 days, 1m 90 days,
+  1h 2 years, XID/BMC 1 year.
+- Migrations are plain SQL files applied in order by a one-shot `migrate` container (with an
+  advisory lock for concurrent starts). Applied migrations are never edited; fixes go in new files.
+
+## 2026-10-01 · A2 · Observability
+
+- **Prometheus metrics** in both services: request rate/latency, events accepted/duplicate,
+  Kafka ack time, in-flight events, consumer lag, rows inserted/duplicate, DB write time,
+  end-to-end latency, DLQ and DB-error counts. Redpanda's own metrics are scraped too.
+- **Dashboards as code:** `scripts/build_dashboards.py` generates the Grafana JSON. Panels are
+  defined once in Python instead of hand-edited JSON. Every panel query was checked through
+  Grafana's query API against live data.
+- **ECC panels count increases between consecutive buckets** (like Prometheus `increase()`), so
+  a counter reset after a driver reload isn't shown as new errors or as negative errors.
+- **Known gap:** murmur2 hashing of 8 node IDs into 8 partitions leaves some partitions empty and
+  doubles up others. That's fine at this scale; with more nodes the spread evens out.

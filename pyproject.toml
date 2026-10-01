@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "AI incident assistant for GPU fleets"
 readme = "README.md"
 requires-python = ">=3.12,<3.13"
-dependencies = ["incident-contracts", "incident-ingest", "incident-replayer[prepare]"]
+dependencies = ["incident-contracts", "incident-ingest", "incident-consumer", "incident-replayer[prepare]"]
 
 [dependency-groups]
 dev = [
@@ -12,17 +12,19 @@ dev = [
     "ruff>=0.6",
     "mypy>=1.11",
     "httpx2>=2.13.1",
+    "asyncpg-stubs>=0.31.3",
 ]
 
 [tool.uv]
 package = false
 
 [tool.uv.workspace]
-members = ["libs/*", "services/ingest", "replayer"]
+members = ["libs/*", "services/ingest", "services/consumer", "replayer"]
 
 [tool.uv.sources]
 incident-contracts = { workspace = true }
 incident-ingest = { workspace = true }
+incident-consumer = { workspace = true }
 incident-replayer = { workspace = true }
 
 [tool.ruff]
@@ -42,4 +44,12 @@ testpaths = ["libs", "services", "replayer", "tests"]
 addopts = "--import-mode=importlib"
 
 [tool.ruff.lint.isort]
-known-first-party = ["incident_contracts", "ingest", "replayer"]
+known-first-party = ["incident_contracts", "ingest", "consumer", "replayer"]
+
+[[tool.mypy.overrides]]
+module = ["aiokafka", "aiokafka.*"]
+ignore_missing_imports = true
+
+[tool.ruff.lint.per-file-ignores]
+# Dashboard definitions: SQL/PromQL strings read better unbroken.
+"scripts/build_dashboards.py" = ["E501"]

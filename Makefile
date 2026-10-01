@@ -1,7 +1,7 @@
 .DEFAULT_GOAL := help
 COMPOSE := docker compose -f deploy/compose.yaml
 
-.PHONY: help install hooks lint typecheck test schemas schemas-check check up down logs
+.PHONY: help install hooks lint typecheck test test-integration schemas schemas-check dashboards check up down logs
 
 help:  ## List targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-14s %s\n", $$1, $$2}'
@@ -19,8 +19,14 @@ lint:  ## Ruff lint and format check
 typecheck:  ## Strict mypy
 	uv run mypy libs services replayer scripts tests
 
-test:  ## Run tests
+test:  ## Run unit tests
 	uv run pytest
+
+test-integration:  ## Run integration tests against the running stack (make up first)
+	INTEGRATION=1 uv run pytest tests/integration -v -s
+
+dashboards:  ## Regenerate Grafana dashboards from scripts/build_dashboards.py
+	uv run python scripts/build_dashboards.py
 
 schemas:  ## Regenerate docs/schemas from code
 	uv run python scripts/export_schemas.py

@@ -1,13 +1,16 @@
-from collections.abc import Iterator
+import asyncio
+from collections.abc import Iterator, Sequence
 from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
 
+import httpx2
 import pytest
-from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from incident_contracts import TelemetryEvent
 from ingest.app import API_KEY_HEADER, create_app
+from ingest.publisher import MemoryPublisher
 from ingest.settings import Settings
 
 KEY = "test-key"
@@ -19,7 +22,7 @@ def make_client(**overrides: Any) -> TestClient:
 
 @pytest.fixture
 def client() -> Iterator[TestClient]:
-    with make_client() as c:  # `with` runs the lifespan, so the sink drains
+    with make_client() as c:  # `with` runs the lifespan (publisher start/stop)
         yield c
 
 
@@ -64,29 +67,76 @@ def test_partial_overlap_with_earlier_batch(client: TestClient) -> None:
     assert post(client, {"events": [first, second]}).json() == {"accepted": 1, "duplicates": 1}
 
 
-def test_full_queue_returns_429_and_batch_is_retryable() -> None:
-    # No `with`: lifespan doesn't run, so nothing drains and the queue stays full.
-    client = make_client(queue_capacity=2, retry_after_s=3)
-    assert post(client, {"events": [xid_event(), xid_event()]}).status_code == 202
+def test_too_many_in_flight_returns_429_and_batch_is_retryable() -> None:
+    publisher = MemoryPublisher()
+    with TestClient(
+        create_app(Settings(api_keys=frozenset({KEY}), max_in_flight=2, retry_after_s=3), publisher)
+    ) as client:
+        batch = {"events": [xid_event(), xid_event(), xid_event()]}
+        resp = post(client, batch)
+        assert resp.status_code == 429
+        assert resp.headers["Retry-After"] == "3"
+        assert resp.json()["error"] == "overloaded"
+        assert publisher.events == []
+        # Not remembered as seen: a smaller retry of the same events is accepted, not "duplicate".
+        assert post(client, {"events": batch["events"][:2]}).json() == {
+            "accepted": 2,
+            "duplicates": 0,
+        }
 
-    batch = {"events": [xid_event()]}
-    resp = post(client, batch)
-    assert resp.status_code == 429
-    assert resp.headers["Retry-After"] == "3"
-    assert resp.json()["error"] == "overloaded"
 
-    # Free space, then the same batch must be accepted, not counted as a duplicate.
-    app: FastAPI = client.app  # type: ignore[assignment]
-    app.state.sink._buffer.clear()
-    assert post(client, batch).json() == {"accepted": 1, "duplicates": 0}
+def test_concurrent_batches_share_the_in_flight_limit() -> None:
+    gate = asyncio.Event()
+
+    class SlowPublisher(MemoryPublisher):
+        async def publish(self, events: Sequence[TelemetryEvent]) -> None:
+            await gate.wait()
+            await super().publish(events)
+
+    app = create_app(Settings(api_keys=frozenset({KEY}), max_in_flight=3), SlowPublisher())
+
+    async def scenario() -> list[int]:
+        transport = httpx2.ASGITransport(app=app)
+        async with httpx2.AsyncClient(
+            transport=transport, base_url="http://t", headers={API_KEY_HEADER: KEY}
+        ) as c:
+            first = asyncio.create_task(
+                c.post("/v1/telemetry", json={"events": [xid_event(), xid_event()]})
+            )
+            await asyncio.sleep(0.05)  # first batch is now waiting on the publisher
+            second = await c.post("/v1/telemetry", json={"events": [xid_event(), xid_event()]})
+            gate.set()
+            return [(await first).status_code, second.status_code]
+
+    assert asyncio.run(scenario()) == [202, 429]
 
 
-def test_batch_of_only_duplicates_is_not_throttled() -> None:
-    client = make_client(queue_capacity=1)
-    batch = {"events": [xid_event()]}
-    assert post(client, batch).status_code == 202
-    # Queue is full, but nothing new needs to go into it.
-    assert post(client, batch).json() == {"accepted": 0, "duplicates": 1}
+def test_stream_failure_returns_503_and_batch_is_retryable() -> None:
+    publisher = MemoryPublisher()
+    with TestClient(create_app(Settings(api_keys=frozenset({KEY})), publisher)) as client:
+        batch = {"events": [xid_event()]}
+        publisher.fail_next = RuntimeError("broker down")
+        resp = post(client, batch)
+        assert resp.status_code == 503
+        assert resp.json()["error"] == "unavailable"
+        assert "Retry-After" in resp.headers
+        assert post(client, batch).json() == {"accepted": 1, "duplicates": 0}
+        assert len(publisher.events) == 1
+
+
+def test_accepted_events_reach_the_publisher() -> None:
+    publisher = MemoryPublisher()
+    with TestClient(create_app(Settings(api_keys=frozenset({KEY})), publisher)) as client:
+        events = [xid_event(), xid_event()]
+        post(client, {"events": [*events, events[0]]})
+        assert [str(e.event_id) for e in publisher.events] == [e["event_id"] for e in events]
+
+
+def test_metrics_endpoint_exposes_counters(client: TestClient) -> None:
+    post(client, {"events": [xid_event()]})
+    body = client.get("/metrics").text
+    assert "ingest_events_total" in body
+    assert 'ingest_requests_total{path="/v1/telemetry",status="202"}' in body
 
 
 @pytest.mark.parametrize("key", [None, "wrong-key"])
@@ -115,5 +165,5 @@ def test_healthz_needs_no_key(client: TestClient) -> None:
 def test_openapi_documents_contract() -> None:
     spec = create_app(Settings()).openapi()
     post_op = spec["paths"]["/v1/telemetry"]["post"]
-    assert set(post_op["responses"]) >= {"202", "401", "422", "429"}
+    assert set(post_op["responses"]) >= {"202", "401", "422", "429", "503"}
     assert spec["components"]["securitySchemes"]["APIKeyHeader"]["name"] == API_KEY_HEADER

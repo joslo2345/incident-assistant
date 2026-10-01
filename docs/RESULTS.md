@@ -28,3 +28,27 @@ Takeaways: the API isn't the bottleneck for any realistic replay speed (100x = 6
 size above 500 and concurrency above 4 didn't help; both client and server are single-core
 Python processes. More throughput would come from more uvicorn workers, which makes the
 in-process dedupe cache per-worker, one more reason the real idempotency belongs in the consumer (A2).
+
+## A2 · Storage, streaming and observability
+
+Setup: same laptop; full Compose stack (Redpanda 1 node, TimescaleDB 2.30/PG17, ingest with one
+uvicorn worker, one consumer). Latency comes from per-row `ingested_at` (Kafka timestamp, set when
+ingest publishes) and `inserted_at` (DB commit), as percentiles over every row of the run.
+
+| Metric | Value | How measured |
+| --- | --- | --- |
+| Publish → DB commit, realistic load | **p50 10 ms, p95 19 ms, p99 21 ms** | 640 events/s (100x replay), 46k rows |
+| Ingest request (incl. Kafka ack) | p50 15 ms, p95 24 ms | Prometheus `ingest_request_seconds` over the same run |
+| **API → DB, realistic load** | **≈ 25 ms p50, ≈ 43 ms p95** | sum of the two above |
+| Publish → DB commit, max load | p50 43 ms, p95 72 ms, p99 268 ms | 553k events at max speed |
+| Sustained ingest throughput, durable | **~34k events/s** | 553k events in 16.3 s, 202 only after Kafka acks |
+| Throughput vs A1 (in-memory) | 65k → 34k events/s | the cost of waiting for `acks=all` before 202 |
+| Consumer kill (SIGKILL) mid-replay | **0 lost, 0 duplicated** | integration test: 553k events, rows = accepted |
+| Forced redelivery (offset rewind) | all redelivered rows skipped, 0 new rows | integration test: `consumer_rows_total{result="duplicate"}` |
+| Invalid message | lands in `telemetry.dlq` with the validation error in a header | integration test |
+| Full 14-day rollup refresh | 3.6 s for 287k minute-buckets | first run of the widened policy (migration 003) |
+
+Takeaways: at a realistic fleet rate, data is queryable about 25 ms after the API receives it. Under
+maximum load the p99 tail (268 ms) comes from consumer batching (up to 5000 messages or 500 ms);
+smaller batches would cut it at some throughput cost. Durability halved peak ingest throughput, which
+still leaves about 50x headroom over the 100x replay rate.
