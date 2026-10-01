@@ -1,0 +1,5 @@
+# Local agent model (A5): Qwen3 30B-A3B (mixture of experts, ~3B active parameters per token).
+# Build with `make model`. Ollama's default context is too short for an investigation: tool
+# results past it are cut off silently, so the context is pinned here.
+FROM qwen3:30b-a3b
+PARAMETER num_ctx 32768

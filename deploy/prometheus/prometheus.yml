@@ -10,6 +10,8 @@ scrape_configs:
     static_configs: [{ targets: ["detector:9102"] }]
   - job_name: knowledge
     static_configs: [{ targets: ["knowledge:8001"] }]
+  - job_name: agent
+    static_configs: [{ targets: ["agent:8002"] }]
   - job_name: redpanda
     metrics_path: /public_metrics
     static_configs: [{ targets: ["redpanda:9644"] }]

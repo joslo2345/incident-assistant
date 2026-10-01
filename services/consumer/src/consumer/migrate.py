@@ -21,6 +21,8 @@ ROLE_PASSWORD_VARS = {
     "grafana_reader": "GRAFANA_DB_PASSWORD",
     "incident_detector": "DETECTOR_DB_PASSWORD",
     "knowledge_service": "KNOWLEDGE_DB_PASSWORD",
+    "incident_agent": "AGENT_DB_PASSWORD",
+    "approval_service": "APPROVAL_DB_PASSWORD",
 }
 
 

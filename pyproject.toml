@@ -4,7 +4,7 @@ version = "0.1.0"
 description = "AI incident assistant for GPU fleets"
 readme = "README.md"
 requires-python = ">=3.12,<3.13"
-dependencies = ["incident-contracts", "incident-ingest", "incident-consumer", "incident-detector", "incident-knowledge", "incident-replayer[prepare]"]
+dependencies = ["incident-contracts", "incident-ingest", "incident-consumer", "incident-detector", "incident-knowledge", "incident-agent", "incident-replayer[prepare]"]
 
 [dependency-groups]
 dev = [
@@ -13,13 +13,14 @@ dev = [
     "mypy>=1.11",
     "httpx2>=2.13.1",
     "asyncpg-stubs>=0.31.3",
+    "pytest-asyncio>=1.0",
 ]
 
 [tool.uv]
 package = false
 
 [tool.uv.workspace]
-members = ["libs/*", "services/ingest", "services/consumer", "services/detector", "services/knowledge", "replayer"]
+members = ["libs/*", "services/ingest", "services/consumer", "services/detector", "services/knowledge", "services/agent", "replayer"]
 
 [tool.uv.sources]
 incident-contracts = { workspace = true }
@@ -27,6 +28,7 @@ incident-ingest = { workspace = true }
 incident-consumer = { workspace = true }
 incident-detector = { workspace = true }
 incident-knowledge = { workspace = true }
+incident-agent = { workspace = true }
 incident-replayer = { workspace = true }
 
 [tool.ruff]
@@ -44,11 +46,13 @@ plugins = ["pydantic.mypy"]
 [tool.pytest.ini_options]
 testpaths = ["libs", "services", "replayer", "tests"]
 # Shared test helpers live in uniquely named modules on this path (test dirs aren't packages).
-pythonpath = ["services/detector/tests", "services/knowledge/tests"]
+pythonpath = ["services/detector/tests", "services/knowledge/tests", "services/agent/tests"]
 addopts = "--import-mode=importlib"
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
 
 [tool.ruff.lint.isort]
-known-first-party = ["incident_contracts", "ingest", "consumer", "detector", "knowledge", "replayer"]
+known-first-party = ["incident_contracts", "ingest", "consumer", "detector", "knowledge", "agent", "replayer"]
 
 [[tool.mypy.overrides]]
 module = ["aiokafka", "aiokafka.*", "fastembed", "fastembed.*", "pgvector", "pgvector.*"]

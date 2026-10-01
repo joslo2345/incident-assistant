@@ -24,6 +24,7 @@ flowchart LR
     P --> A[Investigation agent]
 
     subgraph MCP[MCP server: tools]
+        M0[get_incident]
         M1[get_metrics / get_logs]
         M2[search_runbooks / find_similar_incidents]
         M3[get_node_inventory]
@@ -52,7 +53,7 @@ flowchart LR
 | TimescaleDB | A2 | Raw telemetry plus 1-minute and 1-hour continuous aggregates, with retention policies | Consumer, detector, MCP tools |
 | Detector | A3 | Per-GPU minute features from raw telemetry; static thresholds and XID/BMC event rules, per-GPU z-scores, and a thermal residual model (temperature vs lag-filtered power); groups related alerts per node and component into classified incidents with evidence | TimescaleDB (`incidents`) |
 | Knowledge base | A4 | 22 runbooks + past incidents in pgvector (`kb_chunks`); hybrid search (embeddings + full-text, RRF) with a local cross-encoder reranker; `/v1/ask` returns grounded, cited answers or refuses | Postgres, Claude (optional) |
-| Agent + MCP server | A5 | Plans and calls tools within step and token budgets, returns a schema-valid `Diagnosis`, and traces every run | All stores, LLM provider |
+| Agent + MCP server | A5 | Calls seven tools (served in-process and over MCP) within step, token and time budgets; submits a `Diagnosis` that is checked against the run (evidence on the incident, citations returned by tools); files approval requests for drains and resets; traces every model and tool call in `agent_runs` / `agent_steps`; investigates new live incidents automatically | TimescaleDB, knowledge API, approvals, model provider (local Qwen3 via Ollama by default) |
 | Eval harness | A6 | Replays labeled incidents through the system and scores root cause, citations, actions, cost and latency | Everything |
 | Web UI + Slack bot | A7 | Incident list and detail, approvals with an audit log, follow-up chat, feedback | Postgres, agent |
 | Observability | A2 | Prometheus metrics from every service, Grafana dashboards provisioned as code | All services |
@@ -65,10 +66,13 @@ Every component shares one package of models, `libs/contracts`. Generated schema
 - **Telemetry event** (`telemetry_batch.schema.json`): `gpu_metrics`, `xid` and `bmc_log`
   (Redfish `LogEntry` shape). Every event has a client `event_id` (idempotency), a timezone-aware
   `timestamp` and a `node_id`, which is also the Kafka partition key.
-- **Incident** (`incident.schema.json`): the detector writes components and evidence; the agent
-  adds a `Diagnosis` whose evidence references must exist on the incident and whose citations
-  point to knowledge-base chunks.
+- **Incident** (`incident.schema.json`): the detector writes components and evidence. The agent
+  produces a `Diagnosis` whose evidence references must exist on the incident and whose citations
+  point to knowledge-base chunks it was shown; it's stored on the agent run (`agent_runs`), because
+  the detector keeps rewriting the incident row.
 - **Ingestion API** (`ingest.openapi.json`): `POST /v1/telemetry`, `GET /healthz`.
+- **Agent** (`agent.openapi.json`, `agent_tools.json`): the API, and the tool definitions exactly
+  as the model and MCP clients see them.
 
 ## Key properties
 
@@ -79,9 +83,11 @@ Every component shares one package of models, `libs/contracts`. Generated schema
   crashes neither lose nor duplicate data. Integration tests SIGKILL the consumer and force redelivery to prove it.
 - **The agent can't change the fleet.** Every tool is read-only except `drain_node`, which only
   creates an approval request. Whether an action needs approval comes from its type in the
-  contract, not from the model.
-- **Swappable model provider.** The agent talks to the model through one interface: a hosted API
-  now, self-hosted vLLM in Project B.
+  contract, not from the model, and the database enforces it: the agent's role can file requests
+  but not decide them, and a decision is final.
+- **Swappable model provider.** The agent talks to the model through one interface. Default: an
+  open-source model (Qwen3 30B-A3B) served locally by Ollama over the OpenAI-compatible API; the
+  same provider serves vLLM in Project B, and a Claude provider is built in.
 - **Measured.** Every package records numbers in `RESULTS.md`; A6 makes the full scoring run
   one command (`make eval`).
 

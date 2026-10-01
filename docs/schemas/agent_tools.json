@@ -1,0 +1,315 @@
+{
+  "drain_node": {
+    "description": "Request that a node be drained (no new jobs scheduled on it). This does NOT drain anything: it files a request that a human must approve. Use only when the evidence shows the node should stop taking work.",
+    "parameters": {
+      "additionalProperties": false,
+      "properties": {
+        "node_id": {
+          "maxLength": 64,
+          "minLength": 1,
+          "pattern": "^[a-z0-9][a-z0-9._-]*$",
+          "type": "string"
+        },
+        "reason": {
+          "maxLength": 2000,
+          "minLength": 10,
+          "type": "string"
+        }
+      },
+      "required": [
+        "node_id",
+        "reason"
+      ],
+      "type": "object"
+    },
+    "read_only": false
+  },
+  "find_similar_incidents": {
+    "description": "Past incident reports that resemble this incident, and other recent incidents on the same node. Returned report passages can be cited by chunk_id.",
+    "parameters": {
+      "additionalProperties": false,
+      "properties": {
+        "incident_id": {
+          "format": "uuid",
+          "type": "string"
+        },
+        "k": {
+          "default": 3,
+          "maximum": 5,
+          "minimum": 1,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "incident_id"
+      ],
+      "type": "object"
+    },
+    "read_only": true
+  },
+  "get_incident": {
+    "description": "Fetch an incident opened by the detector: severity, suspected failure type, affected components, and evidence items (each with an evidence_id, signal, value, threshold and time window).",
+    "parameters": {
+      "additionalProperties": false,
+      "properties": {
+        "incident_id": {
+          "format": "uuid",
+          "type": "string"
+        }
+      },
+      "required": [
+        "incident_id"
+      ],
+      "type": "object"
+    },
+    "read_only": true
+  },
+  "get_logs": {
+    "description": "GPU driver XID errors and BMC (baseboard management) log entries for a node, in time order: fans, PSUs, PCIe, temperatures. Optional text filter. Window at most 24 hours.",
+    "parameters": {
+      "additionalProperties": false,
+      "properties": {
+        "contains": {
+          "anyOf": [
+            {
+              "maxLength": 100,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Case-insensitive text filter, e.g. \"PSU\""
+        },
+        "end": {
+          "description": "Window end, ISO 8601 UTC",
+          "type": "string"
+        },
+        "limit": {
+          "default": 40,
+          "maximum": 100,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "node_id": {
+          "maxLength": 64,
+          "minLength": 1,
+          "pattern": "^[a-z0-9][a-z0-9._-]*$",
+          "type": "string"
+        },
+        "start": {
+          "description": "Window start, ISO 8601 UTC, e.g. 2026-09-29T10:40:00Z",
+          "type": "string"
+        }
+      },
+      "required": [
+        "start",
+        "end",
+        "node_id"
+      ],
+      "type": "object"
+    },
+    "read_only": true
+  },
+  "get_metrics": {
+    "description": "GPU telemetry from the per-minute rollup: temperature, power and enforced power limit, utilization, SM clock, throttling, sample counts, and cumulative ECC, PCIe replay and NVLink CRC error counters. With gpu_index: a time series for that GPU. Without: a per-GPU summary of the node, useful to compare a GPU with its neighbours. Window at most 6 hours.",
+    "parameters": {
+      "additionalProperties": false,
+      "properties": {
+        "end": {
+          "description": "Window end, ISO 8601 UTC",
+          "type": "string"
+        },
+        "gpu_index": {
+          "anyOf": [
+            {
+              "exclusiveMaximum": 16,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "One GPU for a time series; omit for a per-GPU summary of the whole node"
+        },
+        "node_id": {
+          "maxLength": 64,
+          "minLength": 1,
+          "pattern": "^[a-z0-9][a-z0-9._-]*$",
+          "type": "string"
+        },
+        "start": {
+          "description": "Window start, ISO 8601 UTC, e.g. 2026-09-29T10:40:00Z",
+          "type": "string"
+        }
+      },
+      "required": [
+        "start",
+        "end",
+        "node_id"
+      ],
+      "type": "object"
+    },
+    "read_only": true
+  },
+  "get_node_inventory": {
+    "description": "A node's GPUs (model, UUID, memory, enforced power limit, last sample time), its recent incidents, and its approval requests (e.g. pending drains).",
+    "parameters": {
+      "additionalProperties": false,
+      "properties": {
+        "node_id": {
+          "maxLength": 64,
+          "minLength": 1,
+          "pattern": "^[a-z0-9][a-z0-9._-]*$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "node_id"
+      ],
+      "type": "object"
+    },
+    "read_only": true
+  },
+  "search_runbooks": {
+    "description": "Search the team's runbooks and past incident reports (hybrid keyword + semantic search, reranked). Returns passages with chunk_ids; cite these chunk_ids in the diagnosis.",
+    "parameters": {
+      "additionalProperties": false,
+      "properties": {
+        "failure_type": {
+          "anyOf": [
+            {
+              "description": "Root-cause categories shared by the fault injector, detector, and agent.",
+              "enum": [
+                "thermal_runaway",
+                "ecc_degradation",
+                "power_fault",
+                "gpu_off_bus",
+                "nvlink_degradation",
+                "pcie_degradation",
+                "noisy_neighbor",
+                "unknown"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Restrict to documents about this failure type"
+        },
+        "k": {
+          "default": 4,
+          "maximum": 8,
+          "minimum": 1,
+          "type": "integer"
+        },
+        "query": {
+          "maxLength": 500,
+          "minLength": 3,
+          "type": "string"
+        }
+      },
+      "required": [
+        "query"
+      ],
+      "type": "object"
+    },
+    "read_only": true
+  },
+  "submit_diagnosis": {
+    "description": "Submit the final diagnosis. Call this exactly once, when the investigation is complete; the run ends when it is accepted.",
+    "parameters": {
+      "additionalProperties": false,
+      "properties": {
+        "action": {
+          "enum": [
+            "none",
+            "monitor",
+            "reset_gpu",
+            "drain_node",
+            "replace_part",
+            "escalate"
+          ],
+          "type": "string"
+        },
+        "action_gpu_index": {
+          "anyOf": [
+            {
+              "exclusiveMaximum": 16,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The GPU the action targets, if it targets one GPU"
+        },
+        "action_rationale": {
+          "maxLength": 2000,
+          "minLength": 10,
+          "type": "string"
+        },
+        "citations": {
+          "description": "chunk_ids of runbook or past-incident passages returned by the tools that support the diagnosis or the action",
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 10,
+          "type": "array"
+        },
+        "confidence": {
+          "description": "0-1: how sure you are of the root cause",
+          "maximum": 1,
+          "minimum": 0,
+          "type": "number"
+        },
+        "evidence_ids": {
+          "description": "IDs of the incident's evidence items that support the cause",
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 20,
+          "type": "array"
+        },
+        "root_cause": {
+          "description": "Root-cause categories shared by the fault injector, detector, and agent.",
+          "enum": [
+            "thermal_runaway",
+            "ecc_degradation",
+            "power_fault",
+            "gpu_off_bus",
+            "nvlink_degradation",
+            "pcie_degradation",
+            "noisy_neighbor",
+            "unknown"
+          ],
+          "type": "string"
+        },
+        "summary": {
+          "description": "What happened and why you believe it, citing the observations you made",
+          "maxLength": 4000,
+          "minLength": 20,
+          "type": "string"
+        }
+      },
+      "required": [
+        "root_cause",
+        "confidence",
+        "summary",
+        "evidence_ids",
+        "citations",
+        "action",
+        "action_rationale"
+      ],
+      "type": "object"
+    },
+    "read_only": true
+  }
+}

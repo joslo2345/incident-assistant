@@ -1,7 +1,7 @@
 # Local stack. Run with `make up` from the repo root.
 # Every port is published on 127.0.0.1 only: nothing here has TLS or Kafka auth (that's A8),
 # so it must not be reachable from the network. Secrets come from deploy/.env (`make env`).
-#   A5: agent   A7: ui
+#   A7: ui
 name: incident-assistant
 
 services:
@@ -72,6 +72,8 @@ services:
       GRAFANA_DB_PASSWORD: ${GRAFANA_DB_PASSWORD:?run `make env` first}
       DETECTOR_DB_PASSWORD: ${DETECTOR_DB_PASSWORD:?run `make env` first}
       KNOWLEDGE_DB_PASSWORD: ${KNOWLEDGE_DB_PASSWORD:?run `make env` first}
+      AGENT_DB_PASSWORD: ${AGENT_DB_PASSWORD:?run `make env` first}
+      APPROVAL_DB_PASSWORD: ${APPROVAL_DB_PASSWORD:?run `make env` first}
     depends_on:
       timescaledb: { condition: service_healthy }
 
@@ -172,6 +174,42 @@ services:
       - ../knowledge:/corpus:ro
     depends_on:
       migrate: { condition: service_completed_successfully }
+
+  agent:
+    build:
+      context: ..
+      dockerfile: deploy/docker/python-service.Dockerfile
+      args: { SERVICE_DIR: services/agent, PACKAGE: incident-agent }
+    image: incident-assistant/agent:dev
+    command: ["uvicorn", "agent.app:app_factory", "--factory", "--host", "0.0.0.0", "--port", "8002"]
+    ports:
+      - "127.0.0.1:8002:8002"
+    environment:
+      # Reads telemetry and incidents, writes traces, can only *file* approval requests.
+      DATABASE_URL: postgresql://incident_agent:${AGENT_DB_PASSWORD:?run `make env` first}@timescaledb:5432/telemetry
+      # Used only by the decision endpoint (approver key required); can't file requests.
+      APPROVAL_DATABASE_URL: postgresql://approval_service:${APPROVAL_DB_PASSWORD:?run `make env` first}@timescaledb:5432/telemetry
+      KNOWLEDGE_URL: http://knowledge:8001
+      KNOWLEDGE_API_KEY: ${KNOWLEDGE_API_KEY:?run `make env` first}
+      AGENT_API_KEYS: ${AGENT_API_KEY:?run `make env` first}
+      APPROVER_API_KEYS: ${APPROVER_API_KEY:?run `make env` first}
+      # Default model: Qwen3 30B-A3B served by Ollama on the host (`make model`), because Docker
+      # on macOS has no GPU access. Any OpenAI-compatible server works (vLLM in B5);
+      # AGENT_PROVIDER=anthropic uses Claude when ANTHROPIC_API_KEY is set.
+      AGENT_PROVIDER: ${AGENT_PROVIDER:-openai_compat}
+      AGENT_BASE_URL: ${AGENT_BASE_URL:-http://host.docker.internal:11434/v1}
+      AGENT_MODEL: ${AGENT_MODEL:-qwen3-agent}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      # Investigate new live incidents automatically.
+      AGENT_WATCH: ${AGENT_WATCH:-true}
+    depends_on:
+      knowledge: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8002/healthz')"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
 
   prometheus:
     image: prom/prometheus:v3.15.0

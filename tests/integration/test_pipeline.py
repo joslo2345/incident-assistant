@@ -1,5 +1,6 @@
 """Delivery guarantees of the ingest -> Redpanda -> consumer -> TimescaleDB pipeline."""
 
+import subprocess
 import time
 import uuid
 
@@ -78,6 +79,9 @@ def test_redelivered_messages_are_not_written_twice() -> None:
     skipped = 0.0
     while skipped < stats["accepted"] and time.monotonic() < deadline:
         time.sleep(1)
-        skipped = consumer_metric('consumer_rows_total{result="duplicate"')
+        try:
+            skipped = consumer_metric('consumer_rows_total{result="duplicate"')
+        except subprocess.CalledProcessError:
+            continue  # the restarted consumer's metrics endpoint isn't up yet
     assert skipped >= stats["accepted"], "every redelivered message was seen again"
     assert telemetry_rows() == written, "and none of them created a new row"
