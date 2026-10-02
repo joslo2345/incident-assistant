@@ -13,6 +13,9 @@ dependencies = [
     "openai>=3.22",
     "anthropic>=1.11",
     "prometheus-client>=0.26",
+    "slack-bolt>=1.30",
+    "slack-sdk>=3.45",
+    "aiohttp>=3.14",
 ]
 
 [project.scripts]

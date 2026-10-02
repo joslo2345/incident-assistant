@@ -1,7 +1,7 @@
 .DEFAULT_GOAL := help
 COMPOSE := docker compose -f deploy/compose.yaml
 
-.PHONY: help env install hooks lint typecheck test test-integration schemas schemas-check dashboards check up down logs model mcp eval eval-data eval-ci eval-ci-record eval-calibrate
+.PHONY: help env install hooks lint typecheck test test-integration schemas schemas-check dashboards check up down logs model mcp demo-users web-dev eval eval-data eval-ci eval-ci-record eval-calibrate
 
 help:  ## List targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-14s %s\n", $$1, $$2}'
@@ -79,6 +79,16 @@ eval-ci-record:  ## Re-record the model replies the CI eval replays (after chang
 
 eval-calibrate:  ## Judge agreement with hand grades (REPORT=eval/reports/a6/dev/<label>.json)
 	uv run evaluate calibrate $(REPORT) --out eval/judge/calibration.json
+
+demo-users:  ## Create local accounts alice (approver) and victor (viewer); passwords in deploy/.env
+	@set -a; . deploy/.env; set +a; \
+	AGENT_NEW_USER_PASSWORD="$$DEMO_APPROVER_PASSWORD" uv run python scripts/agent_env.py \
+	  uv run agent users add alice --role approver --name "Alice (on-call)" --slack U0DEMOALICE && \
+	AGENT_NEW_USER_PASSWORD="$$DEMO_VIEWER_PASSWORD" uv run python scripts/agent_env.py \
+	  uv run agent users add victor --role viewer --name "Victor (viewer)"
+
+web-dev:  ## Run the web UI with hot reload on http://localhost:5173 (stack must be up)
+	cd web && npm install && npm run dev
 
 up: env  ## Build and start the local stack
 	$(COMPOSE) up -d --build --wait

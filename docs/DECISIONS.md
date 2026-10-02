@@ -370,3 +370,43 @@ Running log of design choices: what was chosen, what was rejected, and why.
   each gate run uses a fresh run id (recordings template the run prefix). Two replays of the same
   seed give 24/24 identical incidents. The eval also waits for the 1-minute rollup to cover a
   fresh replay, because get_metrics read it empty in the first minute.
+
+## 2026-10-02 · A7 · Web UI and Slack bot
+
+- **Accounts with roles, not typed names.** The A5 review accepted that `decided_by` was whatever
+  an approver-key holder typed. Now people log in (scrypt hashes, server-side sessions storing
+  only a token hash), decisions are recorded under the session's username, and the
+  approver-key endpoint is gone. Roles: viewer, approver, admin. A check constraint keeps any
+  account from being named like an agent, matching the approval trigger.
+- **Audit log written by a trigger**, append-only (another trigger refuses UPDATE and DELETE, even
+  for the superuser), so no code path can approve without leaving a record.
+- **One API for both front ends.** The Slack bot has no database write path for decisions: it
+  calls the same people routes as the browser, with its own key plus the clicking user's Slack
+  id, and only linked accounts can act. Roles, audit and feedback behave identically in both.
+- **React + Vite + Tailwind, served by nginx** (not Next.js): the API already exists, so a static
+  SPA is the smallest thing to run and secure. nginx exposes only `/api/v1/(auth|ui)/` from the
+  agent; the machine API, `/metrics` and `/docs` aren't reachable through the UI origin.
+- **CSRF**: session cookie is HttpOnly and SameSite=Strict, and state-changing requests need a
+  custom header a cross-site form can't send. No CORS at all (same origin).
+- **Follow-up questions reuse the agent loop** (refactored around a `Task`: prompt, finish tool,
+  checker) with the write tool removed: same budgets, citation checks and traces, stored as runs
+  of kind `followup`. The investigation prompt and messages are unchanged, so A6's eval and the
+  CI recording stay valid.
+- **Slack in Socket Mode**: an outbound WebSocket, so the localhost-only stack needs no public
+  URL or inbound firewall rule. Built and tested against a fake Slack client plus the real API
+  (in-process); connecting a workspace only needs the tokens.
+- **Screenshots come from a script** (`web/scripts/screenshots.mjs`, Playwright) that walks the
+  whole flow: login, a real investigation, approval, audit, follow-up, feedback, and a viewer
+  who must not see approval buttons. It doubles as an end-to-end check.
+- **What the end-to-end browser run caught in follow-up chat** (fixed before merge):
+  1. A follow-up answer said "this node had 5 prior thermal incidents"; 3 were this node (named
+     without the eval's run prefix) and 2 were other nodes. The follow-up prompt now says to
+     check the node named in each past report before attributing it. A wrong answer stays in
+     that incident's chat history and the model repeats it, so history can carry an early
+     mistake forward; the thumbs-down feedback is the way to flag it.
+  2. The model often ends a chat turn in prose (sometimes with a hand-written "citations:" line)
+     instead of calling `submit_answer`. For follow-ups only, a plain-text final reply is now
+     accepted as the answer, with no sources: claimed citations are dropped because they were
+     never checked. Investigations still require the structured, validated submission.
+  3. A third text form of tool call (the tool name on one line, then the arguments object) is
+     recovered like the other two.

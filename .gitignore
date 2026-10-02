@@ -14,3 +14,7 @@ dist/
 # Built per CI eval run (fresh run id each time)
 /eval/sets/ci-replay.*
 /eval/reports/a6/ci-replay/
+
+# Web UI
+/web/node_modules/
+/web/dist/

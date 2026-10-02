@@ -159,6 +159,7 @@ CALL_TEXT = '{"name": "submit_diagnosis", "arguments": {"root_cause": "gpu_off_b
         f"```json\n{CALL_TEXT}\n```",
         f"{CALL_TEXT}\n</tool_call>\n",  # seen live: the server ate the opening tag
         f"<tool_call>{CALL_TEXT}",
+        'submit_diagnosis\n{"root_cause": "gpu_off_bus"}',  # seen in A7: name, then arguments
     ],
 )
 async def test_openai_compat_recovers_tool_calls_written_as_text(content: str) -> None:
@@ -183,6 +184,7 @@ async def test_openai_compat_recovers_tool_calls_written_as_text(content: str) -
         f"I'll submit now: {CALL_TEXT}",  # prose around it: leave it as text
         '{"name": "submit_diagnosis"}',  # no arguments
         "The root cause is a fan failure.",
+        'format_disk\n{"root_cause": "gpu_off_bus"}',  # named form, but not an offered tool
     ],
 )
 async def test_openai_compat_leaves_other_text_alone(content: str) -> None:

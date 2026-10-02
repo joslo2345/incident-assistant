@@ -20,12 +20,20 @@ import hashlib
 import logging
 import time
 import uuid
+from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from agent.data import Approvals
-from agent.diagnosis import SUBMIT, SUBMIT_SPEC, check
+from agent.diagnosis import (
+    ANSWER_SPEC,
+    SUBMIT_SPEC,
+    Answer,
+    answer_from_text,
+    check,
+    check_answer,
+)
 from agent.llm import Provider, ProviderError, ToolResult, ToolSpec, Turn
 from agent.tools import TOOLS, Toolbox, ToolContext, call_tool
 from agent.trace import RunSummary, Step, TraceStore
@@ -100,6 +108,66 @@ class RunResult:
     diagnosis: Diagnosis | None
     approval_request: dict[str, Any] | None = None
     trace: list[Step] = field(default_factory=list)
+    answer: Answer | None = None  # follow-up questions only
+
+
+Checker = Callable[[dict[str, Any] | None, Incident, ToolContext, str, uuid.UUID],
+                   tuple[Any, list[str]]]  # fmt: skip
+
+
+@dataclass(frozen=True)
+class Task:
+    """What a run is for: the prompt, the tool that ends it, and how that tool's call is checked.
+    Investigation and follow-up questions share the loop, budgets, guardrails and tracing."""
+
+    kind: str
+    system: str
+    user: str
+    finish: ToolSpec
+    check: Checker
+    wrap_up: str
+    nudge: str
+    # Chat only: a final plain-text reply is accepted as the result (uncited); None = strict.
+    from_text: Callable[[str, str, uuid.UUID], Any] | None = None
+
+
+FOLLOWUP_PROMPT = """\
+You answer an operator's follow-up question about a GPU datacenter incident that has already \
+been investigated. You get the incident, the diagnosis, and the conversation so far.
+
+- Check facts with the tools when the question needs data you have not seen (metrics, logs, \
+runbooks, past incidents). You cannot change anything: there are no write tools.
+- Be concise and specific: a few sentences, numbers where they help.
+- Past incident reports can be about other nodes. Check the node named in each report before \
+saying something happened on this node, and keep "this node's history" apart from "similar \
+incidents elsewhere".
+- Cite the chunk_ids of runbook or past-incident passages a tool returned when you rely on them, \
+and the evidence_ids of the incident when you refer to its signals.
+- If the data does not answer the question, say so instead of guessing.
+- Submit with submit_answer.
+"""
+FOLLOWUP_SHA = hashlib.sha256(FOLLOWUP_PROMPT.encode()).hexdigest()[:12]
+
+
+def render_followup(
+    incident: Incident, diagnosis: dict[str, Any] | None, history: list[tuple[str, str]],
+    question: str,
+) -> str:  # fmt: skip
+    lines = [render_incident(incident).rsplit("\n\n", 1)[0], ""]
+    if diagnosis:
+        action = diagnosis["recommended_action"]
+        lines += [
+            f"Diagnosis: {diagnosis['root_cause']} (confidence {diagnosis['confidence']}). "
+            f"{diagnosis['summary']}",
+            f"Recommended action: {action['action']}: {action['rationale']}",
+            "",
+        ]
+    else:
+        lines += ["No diagnosis has been made yet.", ""]
+    for who, text in history[-6:]:
+        lines.append(f"{who}: {text}")
+    lines += [f"Operator: {question}", "", "Answer with submit_answer."]
+    return "\n".join(lines)
 
 
 def render_incident(incident: Incident, detector_run: str | None = None) -> str:
@@ -153,7 +221,51 @@ class Investigator:
         if unknown := self.allowed - set(TOOLS):
             raise ValueError(f"unknown tools in allowlist: {sorted(unknown)}")
 
+    def _diagnose_task(self, incident: Incident) -> Task:
+        return Task(
+            kind="diagnose", system=SYSTEM_PROMPT, user=render_incident(incident),
+            finish=SUBMIT_SPEC, check=check,
+            wrap_up="Budget almost used up. Call submit_diagnosis now with what you have; lower "
+            "your confidence if the investigation is incomplete.",
+            nudge="Continue the investigation with the tools, or call submit_diagnosis.",
+        )  # fmt: skip
+
     async def investigate(self, incident: Incident) -> RunResult:
+        result = await self._run(self._diagnose_task(incident), incident, self.allowed,
+                                 {"prompt_sha": PROMPT_SHA})  # fmt: skip
+        d = result.diagnosis
+        if d is not None:
+            result.approval_request = await self._file_approval(d, incident, result.run)
+        await self.traces.finish(result.run, datetime.now(UTC))
+        return result
+
+    async def ask(
+        self,
+        incident: Incident,
+        question: str,
+        diagnosis: dict[str, Any] | None = None,
+        history: list[tuple[str, str]] | None = None,
+        asked_by: str | None = None,
+    ) -> RunResult:
+        """A follow-up question about an incident: same tools minus anything that writes."""
+        task = Task(
+            kind="followup", system=FOLLOWUP_PROMPT,
+            user=render_followup(incident, diagnosis, history or [], question),
+            finish=ANSWER_SPEC, check=check_answer,
+            wrap_up="Budget almost used up. Call submit_answer now with what you have.",
+            nudge="Use the tools if you need data, or call submit_answer.",
+            from_text=answer_from_text,
+        )  # fmt: skip
+        read_only = frozenset(n for n in self.allowed if TOOLS[n].read_only)
+        labels = {"kind": "followup", "prompt_sha": FOLLOWUP_SHA,
+                  "question": question[:2000], "asked_by": asked_by}  # fmt: skip
+        result = await self._run(task, incident, read_only, labels)
+        await self.traces.finish(result.run, datetime.now(UTC))
+        return result
+
+    async def _run(
+        self, task: Task, incident: Incident, allowed: frozenset[str], labels: dict[str, Any]
+    ) -> RunResult:
         run = RunSummary(
             run_id=uuid.uuid4(),
             incident_id=incident.incident_id,
@@ -162,14 +274,14 @@ class Investigator:
             started_at=datetime.now(UTC),
             config={
                 "budget": asdict(self.budget),
-                "tools": sorted(self.allowed),
-                "prompt_sha": PROMPT_SHA,
+                "tools": sorted(allowed),
+                **labels,
                 **self.labels,
             },
         )
         await self.traces.start(run)
         state = _RunState(run, incident, ToolContext(f"agent:{run.run_id}", incident.incident_id,
-                                                     run.run_id))  # fmt: skip
+                                                     run.run_id), task, allowed)  # fmt: skip
         started = time.perf_counter()
         try:
             await asyncio.wait_for(self._loop(state), self.budget.run_timeout_s)
@@ -178,26 +290,26 @@ class Investigator:
         except ProviderError as exc:
             self._fail(state, "error", f"model unavailable: {exc}")
         except Exception as exc:
-            log.exception("investigation %s crashed", run.run_id)
+            log.exception("run %s crashed", run.run_id)
             self._fail(state, "error", f"{type(exc).__name__}: {exc}")
         run.latency_ms = int((time.perf_counter() - started) * 1000)
-
-        request = None
-        if state.diagnosis is not None:
-            run.status = "succeeded"
-            run.diagnosis = state.diagnosis.model_dump(mode="json")
-            request = await self._file_approval(state.diagnosis, incident, run)
-        await self.traces.finish(run, datetime.now(UTC))
-        return RunResult(run, state.diagnosis, request, state.steps)
+        if state.result is None:
+            return RunResult(run, None, None, state.steps)
+        run.status = "succeeded"
+        run.diagnosis = state.result.model_dump(mode="json")
+        if isinstance(state.result, Diagnosis):
+            return RunResult(run, state.result, None, state.steps)
+        return RunResult(run, None, None, state.steps, answer=state.result)
 
     async def _loop(self, s: _RunState) -> None:
-        session = self.provider.start(SYSTEM_PROMPT, render_incident(s.incident))
-        tools = [TOOLS[n].spec for n in sorted(self.allowed)] + [SUBMIT_SPEC]
+        task = s.task
+        session = self.provider.start(task.system, task.user)
+        tools = [TOOLS[n].spec for n in sorted(s.allowed)] + [task.finish]
         b = self.budget
         wrapping_up = False
-        while s.diagnosis is None:
+        while s.result is None:
             if s.run.steps >= b.max_steps:
-                self._fail(s, "budget_exceeded", f"no valid diagnosis after {b.max_steps} steps")
+                self._fail(s, "budget_exceeded", f"no valid result after {b.max_steps} steps")
                 return
             if s.tokens >= b.max_tokens:
                 self._fail(s, "budget_exceeded", f"token budget of {b.max_tokens} used up")
@@ -209,39 +321,38 @@ class Investigator:
             )
             if last_chance and not wrapping_up:
                 wrapping_up = True
-                session.add_user(
-                    "Budget almost used up. Call submit_diagnosis now with what you have; lower "
-                    "your confidence if the investigation is incomplete."
-                )
-            offered = [SUBMIT_SPEC] if wrapping_up else tools
+                session.add_user(task.wrap_up)
+            offered = [task.finish] if wrapping_up else tools
             turn = await self._model_call(s, session.next(offered), offered)
             if turn.stop_reason == "refusal":
                 self._fail(s, "refused", "the model declined the request")
                 return
+            if not turn.tool_calls and task.from_text and turn.text.strip():
+                s.result = task.from_text(turn.text, turn.model, s.run.run_id)
+                if s.result is not None:
+                    return
             if not turn.tool_calls:
                 s.nudges += 1
                 if s.nudges > 2:
                     self._fail(s, "invalid_output", "the model stopped calling tools")
                     return
-                session.add_user(
-                    "Continue the investigation with the tools, or call submit_diagnosis."
-                )
+                session.add_user(task.nudge)
                 continue
             results = []
             for call in turn.tool_calls:
-                if call.name == SUBMIT and s.diagnosis is None:
+                if call.name == task.finish.name and s.result is None:
                     results.append(await self._submit(s, call.id, call.arguments, turn.model))
-                elif call.name == SUBMIT:
+                elif call.name == task.finish.name:
                     results.append(ToolResult(call.id, call.name, "Already accepted.", False))
                 elif wrapping_up:
                     results.append(
-                        ToolResult(call.id, call.name, "Error: only submit_diagnosis now.", True)
+                        ToolResult(call.id, call.name, f"Error: only {task.finish.name} now.", True)
                     )
                 else:
                     results.append(await self._tool_call(s, call.id, call.name, call.arguments))
             session.add_tool_results(results)
             if s.invalid > b.max_invalid_submissions:
-                self._fail(s, "invalid_output", f"{s.invalid} invalid diagnosis submissions")
+                self._fail(s, "invalid_output", f"{s.invalid} invalid {task.kind} submissions")
                 return
 
     async def _model_call(self, s: _RunState, pending: Any, offered: list[ToolSpec]) -> Turn:
@@ -285,7 +396,7 @@ class Investigator:
         started_at, t0 = datetime.now(UTC), time.perf_counter()
         try:
             outcome = await asyncio.wait_for(
-                call_tool(self.toolbox, name, arguments, s.ctx, self.allowed),
+                call_tool(self.toolbox, name, arguments, s.ctx, s.allowed),
                 self.budget.tool_timeout_s,
             )
             content, is_error = outcome.content, outcome.is_error
@@ -311,25 +422,32 @@ class Investigator:
     async def _submit(
         self, s: _RunState, call_id: str, arguments: dict[str, Any] | None, model: str
     ) -> ToolResult:
-        diagnosis, problems = check(arguments, s.incident, s.ctx, model, s.run.run_id)
+        name = s.task.finish.name
+        result, problems = s.task.check(arguments, s.incident, s.ctx, model, s.run.run_id)
         await self._record(
             s,
             Step(
-                seq=len(s.steps), kind="tool", name=SUBMIT, started_at=datetime.now(UTC),
+                seq=len(s.steps), kind="tool", name=name, started_at=datetime.now(UTC),
                 latency_ms=0, input=arguments, output={"problems": problems},
                 is_error=bool(problems),
             ),
         )  # fmt: skip
-        if diagnosis is None:
+        if result is None:
             s.invalid += 1
+            what = "diagnosis" if s.task.kind == "diagnose" else "answer"
             return ToolResult(
-                call_id, SUBMIT,
-                "Error: diagnosis rejected. Fix these and call submit_diagnosis again:\n- "
+                call_id, name,
+                f"Error: {what} rejected. Fix these and call {name} again:\n- "
                 + "\n- ".join(problems),
                 True,
             )  # fmt: skip
-        s.diagnosis = diagnosis
-        return ToolResult(call_id, SUBMIT, "Diagnosis accepted.", False)
+        s.result = result
+        return ToolResult(
+            call_id,
+            name,
+            f"{'Diagnosis' if s.task.kind == 'diagnose' else 'Answer'} accepted.",
+            False,
+        )
 
     async def _record(self, s: _RunState, step: Step) -> None:
         s.steps.append(step)
@@ -355,7 +473,7 @@ class Investigator:
     def _fail(self, s: _RunState, status: str, error: str) -> None:
         s.run.status = status
         s.run.error = error
-        s.diagnosis = None
+        s.result = None
 
 
 @dataclass
@@ -363,7 +481,9 @@ class _RunState:
     run: RunSummary
     incident: Incident
     ctx: ToolContext
-    diagnosis: Diagnosis | None = None
+    task: Task
+    allowed: frozenset[str]
+    result: Any = None
     steps: list[Step] = field(default_factory=list)
     last_input_tokens: int = 0
     invalid: int = 0
