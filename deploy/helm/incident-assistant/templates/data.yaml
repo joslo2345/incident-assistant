@@ -1,0 +1,145 @@
+{{- $v := .Values }}
+{{- if $v.postgres.inCluster }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: timescaledb
+  labels: {{- include "ia.labels" . | nindent 4 }}
+spec:
+  clusterIP: None
+  selector: {{- include "ia.selector" "timescaledb" | nindent 4 }}
+  ports: [{ name: postgres, port: 5432 }]
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: timescaledb
+  labels: {{- include "ia.labels" . | nindent 4 }}
+    app.kubernetes.io/name: timescaledb
+spec:
+  serviceName: timescaledb
+  replicas: 1
+  selector:
+    matchLabels: {{- include "ia.selector" "timescaledb" | nindent 6 }}
+  template:
+    metadata:
+      labels: {{- include "ia.selector" "timescaledb" | nindent 8 }}
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 70          # postgres in the Alpine-based image
+        runAsGroup: 70
+        fsGroup: 70
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: postgres
+          image: {{ $v.postgres.image }}
+          env:
+            - { name: POSTGRES_DB, value: {{ $v.postgres.database | quote }} }
+            - { name: POSTGRES_USER, value: {{ $v.postgres.adminUser | quote }} }
+            {{- include "ia.secretEnv" (dict "key" "POSTGRES_PASSWORD" "ctx" $) | nindent 12 }}
+            - { name: PGDATA, value: /var/lib/postgresql/data/pgdata }
+          ports: [{ name: postgres, containerPort: 5432 }]
+          readinessProbe:
+            exec: { command: ["pg_isready", "-U", "{{ $v.postgres.adminUser }}", "-d", "{{ $v.postgres.database }}"] }
+            periodSeconds: 5
+          livenessProbe:
+            exec: { command: ["pg_isready", "-U", "{{ $v.postgres.adminUser }}"] }
+            initialDelaySeconds: 30
+            periodSeconds: 15
+          resources: {{- toYaml $v.postgres.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true   # writes only to its data volume, socket dir and /tmp
+            capabilities: { drop: ["ALL"] }
+          volumeMounts:
+            - { name: data, mountPath: /var/lib/postgresql/data }
+            - { name: run, mountPath: /var/run/postgresql }
+            - { name: tmp, mountPath: /tmp }
+      volumes:
+        - name: run
+          emptyDir: {}
+        - name: tmp
+          emptyDir: { sizeLimit: 256Mi }
+  volumeClaimTemplates:
+    - metadata: { name: data }
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        {{- with $v.postgres.storageClassName }}
+        storageClassName: {{ . }}
+        {{- end }}
+        resources: { requests: { storage: {{ $v.postgres.storage }} } }
+---
+{{- end }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: redpanda
+  labels: {{- include "ia.labels" . | nindent 4 }}
+spec:
+  clusterIP: None
+  selector: {{- include "ia.selector" "redpanda" | nindent 4 }}
+  ports: [{ name: kafka, port: 9092 }, { name: admin, port: 9644 }]
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: redpanda
+  labels: {{- include "ia.labels" . | nindent 4 }}
+    app.kubernetes.io/name: redpanda
+spec:
+  serviceName: redpanda
+  replicas: 1
+  selector:
+    matchLabels: {{- include "ia.selector" "redpanda" | nindent 6 }}
+  template:
+    metadata:
+      labels: {{- include "ia.selector" "redpanda" | nindent 8 }}
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 101
+        runAsGroup: 101
+        fsGroup: 101
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: redpanda
+          image: {{ $v.redpanda.image }}
+          args:
+            - redpanda
+            - start
+            - --mode=dev-container
+            - --smp=1
+            - --memory=1G
+            - --kafka-addr=internal://0.0.0.0:9092
+            - --advertise-kafka-addr=internal://redpanda:9092
+            - --rpc-addr=0.0.0.0:33145
+            - --advertise-rpc-addr=redpanda:33145
+          ports: [{ name: kafka, containerPort: 9092 }, { name: admin, containerPort: 9644 }]
+          readinessProbe:
+            exec: { command: ["sh", "-c", "rpk cluster health | grep -qE 'Healthy:\\s+true'"] }
+            periodSeconds: 5
+          resources: {{- toYaml $v.redpanda.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true   # writes only to its data volume, config dir and /tmp
+            capabilities: { drop: ["ALL"] }
+          volumeMounts:
+            - { name: data, mountPath: /var/lib/redpanda/data }
+            - { name: config, mountPath: /etc/redpanda }
+            - { name: tmp, mountPath: /tmp }
+      volumes:
+        - name: config
+          emptyDir: {}
+        - name: tmp
+          emptyDir: { sizeLimit: 256Mi }
+  volumeClaimTemplates:
+    - metadata: { name: data }
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        {{- with $v.redpanda.storageClassName }}
+        storageClassName: {{ . }}
+        {{- end }}
+        resources: { requests: { storage: {{ $v.redpanda.storage }} } }

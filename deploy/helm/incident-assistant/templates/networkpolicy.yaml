@@ -1,0 +1,64 @@
+{{- if .Values.networkPolicy.enabled }}
+{{- $v := .Values }}
+# Default: nothing in this namespace accepts connections. Each rule below opens exactly one path
+# the system uses (the same edges as deploy/compose.yaml). The data stores also get no egress
+# beyond DNS: a compromised database pod can't call out.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-ingress
+  labels: {{- include "ia.labels" . | nindent 4 }}
+spec:
+  podSelector: {}
+  policyTypes: [Ingress]
+{{- include "ia.allow" (dict "ctx" . "to" "timescaledb" "ports" (list 5432) "from" (list "migrate" "consumer" "detector" "knowledge" "kb-ingest" "agent" "slack-bot")) }}
+{{- include "ia.allow" (dict "ctx" . "to" "redpanda" "ports" (list 9092) "from" (list "ingest" "consumer" "topics")) }}
+{{- include "ia.allow" (dict "ctx" . "to" "knowledge" "ports" (list 8001) "from" (list "agent")) }}
+{{- include "ia.allow" (dict "ctx" . "to" "agent" "ports" (list 8002) "from" (list "web" "slack-bot")) }}
+---
+# Entry points: the web UI and the ingest API, on their own port only. Default: any source,
+# including traffic from outside the cluster (NodePort/LoadBalancer arrives from node IPs, not
+# pods). Narrow with networkPolicy.webFrom / ingestFrom (e.g. the ingress controller namespace).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-to-web
+  labels: {{- include "ia.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels: {{- include "ia.selector" "web" | nindent 6 }}
+  policyTypes: [Ingress]
+  ingress:
+    - ports: [{ port: 8080, protocol: TCP }]
+      {{- with $v.networkPolicy.webFrom }}
+      from: {{- toYaml . | nindent 8 }}
+      {{- end }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-to-ingest
+  labels: {{- include "ia.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels: {{- include "ia.selector" "ingest" | nindent 6 }}
+  policyTypes: [Ingress]
+  ingress:
+    - ports: [{ port: 8000, protocol: TCP }]
+      {{- with $v.networkPolicy.ingestFrom }}
+      from: {{- toYaml . | nindent 8 }}
+      {{- end }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: data-stores-no-egress
+  labels: {{- include "ia.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchExpressions:
+      - { key: app.kubernetes.io/name, operator: In, values: [timescaledb, redpanda] }
+  policyTypes: [Egress]
+  egress:
+    - ports: [{ port: 53, protocol: UDP }, { port: 53, protocol: TCP }]
+{{- end }}

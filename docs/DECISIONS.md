@@ -410,3 +410,38 @@ Running log of design choices: what was chosen, what was rejected, and why.
      never checked. Investigations still require the structured, validated submission.
   3. A third text form of tool call (the tool name on one line, then the arguments object) is
      recovered like the other two.
+
+## 2026-10-02 · A8 · Packaging, Kubernetes, Terraform and security
+
+- **Local only, $0, by choice.** The chart is tested end to end on kind; the Azure Terraform is
+  written, validated against azurerm 5.8, Trivy-scanned and schema-checked, but not applied. The
+  install guide says which is which.
+- **Azure** (the plan's suggestion): AKS Free tier with Entra RBAC, no local accounts, workload
+  identity and Calico; Postgres Flexible Server (TimescaleDB and pgvector allow-listed, private,
+  TLS); ACR without an admin user; Key Vault with every generated secret.
+- **Secrets never leave Azure:** Terraform generates them into Key Vault, External Secrets copies
+  them into the cluster with workload identity, and GitHub deploys with OIDC. No client secret,
+  kubeconfig or password exists in Git, Helm values or CI variables. Terraform state does hold
+  them, so the backend must be a private, encrypted storage account.
+- **API server and Key Vault closed to the internet** (Trivy CRITICALs): `admin_ip_ranges` is
+  required. CI doesn't need the API server: `helm` runs through `az aks command invoke` (via the
+  Azure control plane), so there's no need to allow-list GitHub's runner IP ranges.
+- **One release per namespace, short service names.** The services and the web UI's nginx
+  address each other as `agent`, `knowledge`, and so on, as in Compose.
+- **Readiness from the database itself.** Each service's init container retries logging in as
+  its own role; roles get a login only when migrations set their passwords, so "can log in" means
+  "migrations are done". Restarts on a fresh install went from 2-4 per service to 0, and the
+  install time from 2:44 to 1:45.
+- **Calico on kind**, because kind's default CNI ignores NetworkPolicies and testing them there
+  would prove nothing. Probes from inside pods: 3 allowed paths open, 5 unneeded paths blocked.
+- **What the cluster tests caught:**
+  1. With the pod network on 192.168.0.0/16, pods couldn't reach the Mac's Ollama: Docker
+     Desktop's host gateway is 192.168.65.254, inside that range. Now 10.244.0.0/16.
+  2. "Any pod in the cluster" isn't enough for the entry points: NodePort and load-balancer
+     traffic arrives from node IPs. The web and ingest policies allow any source on their own
+     port, narrowable with values.
+  3. The Docker build context was 2.8 GB (the raw trace was not in .dockerignore); image builds
+     now take 13 s for all six.
+- **Accepted findings (MEDIUM):** no Log Analytics (cost), no private cluster (needs a VPN or
+  bastion; authorized IP ranges instead), and a registry allow-list belongs in an admission
+  policy, not the chart.

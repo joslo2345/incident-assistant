@@ -30,8 +30,10 @@ RUN apt-get update \
     && useradd --system --uid 10001 app \
     && mkdir -p /models && chown app /models  # model cache (knowledge service)
 COPY --from=build /app/.venv /app/.venv
-# Migrations ship in every image; only the consumer's migrate command uses them.
+# Migrations and the knowledge corpus (~350 KB) ship in every image, so Kubernetes jobs need no
+# volumes: only the consumer's migrate command and the knowledge ingest use them.
 COPY deploy/db/migrations /app/migrations
+COPY knowledge /app/corpus
 ENV PATH=/app/.venv/bin:$PATH PYTHONUNBUFFERED=1 MIGRATIONS_DIR=/app/migrations
 WORKDIR /app
 USER app

@@ -1,0 +1,342 @@
+{{- $v := .Values }}
+{{- $pull := $v.image.pullPolicy }}
+# ---------------------------------------------------------------- ingest (public write API)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ingest
+  labels: {{- include "ia.labels" . | nindent 4 }}
+    app.kubernetes.io/name: ingest
+spec:
+  replicas: {{ $v.ingest.replicas }}
+  selector:
+    matchLabels: {{- include "ia.selector" "ingest" | nindent 6 }}
+  template:
+    metadata:
+      labels: {{- include "ia.selector" "ingest" | nindent 8 }}
+      annotations: { prometheus.io/scrape: "true", prometheus.io/port: "8000" }
+    spec:
+      {{- include "ia.podSecurity" . | nindent 6 }}
+      initContainers:
+        {{- include "ia.waitForTcp" (dict "host" "redpanda" "port" 9092 "image" "ingest" "ctx" $) | nindent 8 }}
+      containers:
+        - name: ingest
+          image: {{ include "ia.image" (dict "name" "ingest" "ctx" $) }}
+          imagePullPolicy: {{ $pull }}
+          command: ["uvicorn", "ingest.app:app", "--host", "0.0.0.0", "--port", "8000"]
+          env:
+            {{- include "ia.secretEnv" (dict "key" "INGEST_API_KEYS" "ctx" $) | nindent 12 }}
+            - { name: KAFKA_BOOTSTRAP, value: "redpanda:9092" }
+          ports: [{ name: http, containerPort: 8000 }]
+          readinessProbe: { httpGet: { path: /healthz, port: http }, periodSeconds: 5 }
+          livenessProbe: { httpGet: { path: /healthz, port: http }, initialDelaySeconds: 10, periodSeconds: 15 }
+          resources: {{- toYaml $v.ingest.resources | nindent 12 }}
+          {{- include "ia.containerSecurity" . | nindent 10 }}
+          volumeMounts: [{ name: tmp, mountPath: /tmp }]
+      volumes: {{- include "ia.tmp" . | nindent 8 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ingest
+  labels: {{- include "ia.labels" . | nindent 4 }}
+spec:
+  type: {{ $v.ingest.service.type }}
+  selector: {{- include "ia.selector" "ingest" | nindent 4 }}
+  ports:
+    - name: http
+      port: 8000
+      targetPort: http
+      {{- with $v.ingest.service.nodePort }}
+      nodePort: {{ . }}
+      {{- end }}
+---
+# ---------------------------------------------------------------- consumer
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: consumer
+  labels: {{- include "ia.labels" . | nindent 4 }}
+    app.kubernetes.io/name: consumer
+spec:
+  replicas: {{ $v.consumer.replicas }}
+  selector:
+    matchLabels: {{- include "ia.selector" "consumer" | nindent 6 }}
+  template:
+    metadata:
+      labels: {{- include "ia.selector" "consumer" | nindent 8 }}
+      annotations: { prometheus.io/scrape: "true", prometheus.io/port: "9101" }
+    spec:
+      {{- include "ia.podSecurity" . | nindent 6 }}
+      initContainers:
+        {{- include "ia.waitForDb" (dict "user" "telemetry_writer" "passKey" "CONSUMER_DB_PASSWORD" "image" "consumer" "ctx" $) | nindent 8 }}
+        {{- include "ia.waitForTcp" (dict "host" "redpanda" "port" 9092 "image" "consumer" "ctx" $) | nindent 8 }}
+      containers:
+        - name: consumer
+          image: {{ include "ia.image" (dict "name" "consumer" "ctx" $) }}
+          imagePullPolicy: {{ $pull }}
+          command: ["python", "-m", "consumer.main"]
+          env:
+            - { name: KAFKA_BOOTSTRAP, value: "redpanda:9092" }
+            {{- include "ia.dbEnv" (dict "user" "telemetry_writer" "passKey" "CONSUMER_DB_PASSWORD" "ctx" $) | nindent 12 }}
+          ports: [{ name: metrics, containerPort: 9101 }]
+          readinessProbe: { httpGet: { path: /metrics, port: metrics }, periodSeconds: 10 }
+          livenessProbe: { httpGet: { path: /metrics, port: metrics }, initialDelaySeconds: 30, periodSeconds: 20 }
+          resources: {{- toYaml $v.consumer.resources | nindent 12 }}
+          {{- include "ia.containerSecurity" . | nindent 10 }}
+          volumeMounts: [{ name: tmp, mountPath: /tmp }]
+      volumes: {{- include "ia.tmp" . | nindent 8 }}
+---
+# ---------------------------------------------------------------- detector
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: detector
+  labels: {{- include "ia.labels" . | nindent 4 }}
+    app.kubernetes.io/name: detector
+spec:
+  replicas: 1
+  strategy: { type: Recreate }   # never two live detectors at once
+  selector:
+    matchLabels: {{- include "ia.selector" "detector" | nindent 6 }}
+  template:
+    metadata:
+      labels: {{- include "ia.selector" "detector" | nindent 8 }}
+      annotations: { prometheus.io/scrape: "true", prometheus.io/port: "9102" }
+    spec:
+      {{- include "ia.podSecurity" . | nindent 6 }}
+      initContainers:
+        {{- include "ia.waitForDb" (dict "user" "incident_detector" "passKey" "DETECTOR_DB_PASSWORD" "image" "detector" "ctx" $) | nindent 8 }}
+      containers:
+        - name: detector
+          image: {{ include "ia.image" (dict "name" "detector" "ctx" $) }}
+          imagePullPolicy: {{ $pull }}
+          command: ["detect", "live"]
+          env:
+            {{- include "ia.dbEnv" (dict "user" "incident_detector" "passKey" "DETECTOR_DB_PASSWORD" "ctx" $) | nindent 12 }}
+          ports: [{ name: metrics, containerPort: 9102 }]
+          readinessProbe: { httpGet: { path: /metrics, port: metrics }, periodSeconds: 10 }
+          livenessProbe: { httpGet: { path: /metrics, port: metrics }, initialDelaySeconds: 30, periodSeconds: 20 }
+          resources: {{- toYaml $v.detector.resources | nindent 12 }}
+          {{- include "ia.containerSecurity" . | nindent 10 }}
+          volumeMounts: [{ name: tmp, mountPath: /tmp }]
+      volumes: {{- include "ia.tmp" . | nindent 8 }}
+---
+# ---------------------------------------------------------------- knowledge
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: knowledge
+  labels: {{- include "ia.labels" . | nindent 4 }}
+    app.kubernetes.io/name: knowledge
+spec:
+  replicas: {{ $v.knowledge.replicas }}
+  selector:
+    matchLabels: {{- include "ia.selector" "knowledge" | nindent 6 }}
+  template:
+    metadata:
+      labels: {{- include "ia.selector" "knowledge" | nindent 8 }}
+      annotations: { prometheus.io/scrape: "true", prometheus.io/port: "8001" }
+    spec:
+      {{- include "ia.podSecurity" . | nindent 6 }}
+      initContainers:
+        {{- include "ia.waitForDb" (dict "user" "knowledge_service" "passKey" "KNOWLEDGE_DB_PASSWORD" "image" "knowledge" "ctx" $) | nindent 8 }}
+      containers:
+        - name: knowledge
+          image: {{ include "ia.image" (dict "name" "knowledge" "ctx" $) }}
+          imagePullPolicy: {{ $pull }}
+          command: ["uvicorn", "knowledge.app:app_factory", "--factory", "--host", "0.0.0.0", "--port", "8001"]
+          env:
+            {{- include "ia.dbEnv" (dict "user" "knowledge_service" "passKey" "KNOWLEDGE_DB_PASSWORD" "ctx" $) | nindent 12 }}
+            - name: KNOWLEDGE_API_KEYS
+              valueFrom: { secretKeyRef: { name: {{ $v.secrets.existingSecret }}, key: KNOWLEDGE_API_KEY } }
+            - { name: FASTEMBED_CACHE_DIR, value: /models }
+            - { name: HF_HOME, value: /models/hf }
+            - { name: HF_HUB_DISABLE_TELEMETRY, value: "1" }
+            {{- include "ia.secretEnv" (dict "key" "ANTHROPIC_API_KEY" "ctx" $ "optional" true) | nindent 12 }}
+          ports: [{ name: http, containerPort: 8001 }]
+          # Models download on first start: give it time before liveness counts.
+          startupProbe: { httpGet: { path: /healthz, port: http }, periodSeconds: 5, failureThreshold: 60 }
+          readinessProbe: { httpGet: { path: /healthz, port: http }, periodSeconds: 5 }
+          livenessProbe: { httpGet: { path: /healthz, port: http }, periodSeconds: 15 }
+          resources: {{- toYaml $v.knowledge.resources | nindent 12 }}
+          {{- include "ia.containerSecurity" . | nindent 10 }}
+          volumeMounts: [{ name: models, mountPath: /models }, { name: tmp, mountPath: /tmp }]
+      volumes:
+        - name: models
+          emptyDir: { sizeLimit: 2Gi }
+        {{- include "ia.tmp" . | nindent 8 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: knowledge
+  labels: {{- include "ia.labels" . | nindent 4 }}
+spec:
+  selector: {{- include "ia.selector" "knowledge" | nindent 4 }}
+  ports: [{ name: http, port: 8001, targetPort: http }]
+---
+# ---------------------------------------------------------------- agent
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: agent
+  labels: {{- include "ia.labels" . | nindent 4 }}
+    app.kubernetes.io/name: agent
+spec:
+  replicas: 1
+  strategy: { type: Recreate }   # one watcher at a time
+  selector:
+    matchLabels: {{- include "ia.selector" "agent" | nindent 6 }}
+  template:
+    metadata:
+      labels: {{- include "ia.selector" "agent" | nindent 8 }}
+      annotations: { prometheus.io/scrape: "true", prometheus.io/port: "8002" }
+    spec:
+      {{- include "ia.podSecurity" . | nindent 6 }}
+      initContainers:
+        {{- include "ia.waitForDb" (dict "user" "incident_agent" "passKey" "AGENT_DB_PASSWORD" "image" "agent" "ctx" $) | nindent 8 }}
+      containers:
+        - name: agent
+          image: {{ include "ia.image" (dict "name" "agent" "ctx" $) }}
+          imagePullPolicy: {{ $pull }}
+          command: ["uvicorn", "agent.app:app_factory", "--factory", "--host", "0.0.0.0", "--port", "8002"]
+          env:
+            {{- include "ia.dbEnv" (dict "user" "incident_agent" "passKey" "AGENT_DB_PASSWORD" "ctx" $) | nindent 12 }}
+            {{- include "ia.dbEnv" (dict "name" "APPROVAL_DATABASE_URL" "user" "approval_service" "passKey" "APPROVAL_DB_PASSWORD" "ctx" $) | nindent 12 }}
+            - { name: KNOWLEDGE_URL, value: "http://knowledge:8001" }
+            {{- include "ia.secretEnv" (dict "key" "KNOWLEDGE_API_KEY" "ctx" $) | nindent 12 }}
+            - name: AGENT_API_KEYS
+              valueFrom: { secretKeyRef: { name: {{ $v.secrets.existingSecret }}, key: AGENT_API_KEY } }
+            - name: SLACK_BOT_API_KEYS
+              valueFrom: { secretKeyRef: { name: {{ $v.secrets.existingSecret }}, key: SLACK_BOT_API_KEY } }
+            - { name: AGENT_PROVIDER, value: {{ $v.model.provider | quote }} }
+            - { name: AGENT_BASE_URL, value: {{ $v.model.baseUrl | quote }} }
+            - { name: AGENT_MODEL, value: {{ $v.model.name | quote }} }
+            {{- include "ia.secretEnv" (dict "key" "ANTHROPIC_API_KEY" "ctx" $ "optional" true) | nindent 12 }}
+            - { name: AGENT_WATCH, value: {{ $v.agent.watch | quote }} }
+            - { name: AGENT_SECURE_COOKIES, value: {{ $v.agent.secureCookies | quote }} }
+          ports: [{ name: http, containerPort: 8002 }]
+          readinessProbe: { httpGet: { path: /healthz, port: http }, periodSeconds: 5 }
+          livenessProbe: { httpGet: { path: /healthz, port: http }, initialDelaySeconds: 10, periodSeconds: 15 }
+          resources: {{- toYaml $v.agent.resources | nindent 12 }}
+          {{- include "ia.containerSecurity" . | nindent 10 }}
+          volumeMounts: [{ name: tmp, mountPath: /tmp }]
+      volumes: {{- include "ia.tmp" . | nindent 8 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: agent
+  labels: {{- include "ia.labels" . | nindent 4 }}
+spec:
+  selector: {{- include "ia.selector" "agent" | nindent 4 }}
+  ports: [{ name: http, port: 8002, targetPort: http }]
+---
+# ---------------------------------------------------------------- web
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web
+  labels: {{- include "ia.labels" . | nindent 4 }}
+    app.kubernetes.io/name: web
+spec:
+  replicas: {{ $v.web.replicas }}
+  selector:
+    matchLabels: {{- include "ia.selector" "web" | nindent 6 }}
+  template:
+    metadata:
+      labels: {{- include "ia.selector" "web" | nindent 8 }}
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 101           # nginx in nginx-unprivileged
+        runAsGroup: 101
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: web
+          image: {{ include "ia.image" (dict "name" "web" "ctx" $) }}
+          imagePullPolicy: {{ $pull }}
+          ports: [{ name: http, containerPort: 8080 }]
+          readinessProbe: { httpGet: { path: /, port: http }, periodSeconds: 5 }
+          livenessProbe: { httpGet: { path: /, port: http }, periodSeconds: 15 }
+          resources: {{- toYaml $v.web.resources | nindent 12 }}
+          {{- include "ia.containerSecurity" . | nindent 10 }}
+          volumeMounts:
+            - { name: tmp, mountPath: /tmp }
+      volumes: {{- include "ia.tmp" . | nindent 8 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: web
+  labels: {{- include "ia.labels" . | nindent 4 }}
+spec:
+  type: {{ $v.web.service.type }}
+  selector: {{- include "ia.selector" "web" | nindent 4 }}
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+      {{- with $v.web.service.nodePort }}
+      nodePort: {{ . }}
+      {{- end }}
+{{- if $v.web.ingress.enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: web
+  labels: {{- include "ia.labels" . | nindent 4 }}
+  {{- with $v.web.ingress.annotations }}
+  annotations: {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- with $v.web.ingress.className }}
+  ingressClassName: {{ . }}
+  {{- end }}
+  {{- if $v.web.ingress.tlsSecretName }}
+  tls: [{ hosts: [{{ $v.web.ingress.host | quote }}], secretName: {{ $v.web.ingress.tlsSecretName }} }]
+  {{- end }}
+  rules:
+    - host: {{ $v.web.ingress.host | quote }}
+      http:
+        paths: [{ path: /, pathType: Prefix, backend: { service: { name: web, port: { name: http } } } }]
+{{- end }}
+{{- if $v.slackBot.enabled }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: slack-bot
+  labels: {{- include "ia.labels" . | nindent 4 }}
+    app.kubernetes.io/name: slack-bot
+spec:
+  replicas: 1
+  strategy: { type: Recreate }
+  selector:
+    matchLabels: {{- include "ia.selector" "slack-bot" | nindent 6 }}
+  template:
+    metadata:
+      labels: {{- include "ia.selector" "slack-bot" | nindent 8 }}
+    spec:
+      {{- include "ia.podSecurity" . | nindent 6 }}
+      containers:
+        - name: slack-bot
+          image: {{ include "ia.image" (dict "name" "agent" "ctx" $) }}
+          imagePullPolicy: {{ $pull }}
+          command: ["agent", "slack"]
+          env:
+            {{- include "ia.dbEnv" (dict "user" "incident_agent" "passKey" "AGENT_DB_PASSWORD" "ctx" $) | nindent 12 }}
+            - { name: AGENT_API_URL, value: "http://agent:8002" }
+            {{- range list "SLACK_BOT_API_KEY" "SLACK_BOT_TOKEN" "SLACK_APP_TOKEN" }}
+            {{- include "ia.secretEnv" (dict "key" . "ctx" $) | nindent 12 }}
+            {{- end }}
+            - { name: SLACK_CHANNEL, value: {{ $v.slackBot.channel | quote }} }
+            - { name: WEB_URL, value: {{ $v.slackBot.webUrl | quote }} }
+          resources: {{- toYaml $v.slackBot.resources | nindent 12 }}
+          {{- include "ia.containerSecurity" . | nindent 10 }}
+          volumeMounts: [{ name: tmp, mountPath: /tmp }]
+      volumes: {{- include "ia.tmp" . | nindent 8 }}
+{{- end }}

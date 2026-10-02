@@ -179,3 +179,21 @@ opposite conclusion; its 96% citation support on the baseline was really ~78% by
 
 **CI:** the 10-incident set replays recorded model replies through the real stack on every PR
 (`make eval-ci`); it fails on a failed run, more tool errors, or scores below the recording.
+
+## A8 · Packaging and Kubernetes
+
+Local Kubernetes (kind 1.37 + Calico) on an M3 Pro, Docker VM 8 GB / 12 CPUs. Cloud path written
+but not applied (by choice: $0), so its cost is an estimate from list prices.
+
+| Metric | Value | How measured |
+| --- | --- | --- |
+| From empty Docker to all pods ready | **1 min 45 s** | `make kind-up && make kind-install` (cluster, Calico, 6 image builds, load, helm --wait) |
+| Restarts on a fresh install | **0** (was 2-4 per service) | init containers wait for their own DB role and the broker |
+| Image builds, all six | 13 s | after removing the 2.8 GB trace from the build context |
+| Ingest throughput into the cluster | 41,600 events/s | 138,048 events replayed through the NodePort |
+| Injected faults detected in the cluster | 3/3 | `scripts/k8s_smoke.sh` |
+| Full flow in a browser against the cluster | passed | investigate (pod to Ollama on the host), approve, audit, follow-up, viewer without buttons |
+| NetworkPolicy enforcement | 3/3 allowed paths open, 5/5 unneeded paths blocked | TCP probes from inside pods |
+| Chart and Terraform misconfigurations, HIGH/CRITICAL | **0** (was 2 CRITICAL + 2 HIGH) | Trivy config |
+| Rendered manifests valid | 25/25 (kind values), 24/25 + 1 CRD (Azure values) | kubeconform -strict |
+| Azure cost, estimated | **≈ $5.30/day** | Azure Retail Prices API, westus2 list prices (docs/INSTALL.md) |

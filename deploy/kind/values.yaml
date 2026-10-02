@@ -1,0 +1,17 @@
+# Overrides for the local kind cluster (`make kind-install`).
+image:
+  pullPolicy: Never            # images are loaded with `kind load`, not pulled
+web:
+  replicas: 1
+  service: { type: NodePort, nodePort: 30080 }
+ingest:
+  replicas: 1
+  service: { type: NodePort, nodePort: 30800 }
+postgres:
+  storage: 4Gi
+redpanda:
+  storage: 2Gi
+model:
+  baseUrl: http://host.docker.internal:11434/v1   # the Mac's Ollama
+agent:
+  watch: true
