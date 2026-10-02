@@ -151,7 +151,8 @@ class PgTraceReader:
     async def latest_diagnosis(self, incident_id: uuid.UUID) -> dict[str, Any] | None:
         r = await self.pool.fetchrow(
             f"SELECT {_RUN_COLUMNS} FROM agent_runs WHERE incident_id = $1 "
-            f"AND status = 'succeeded' ORDER BY started_at DESC LIMIT 1",
+            f"AND status = 'succeeded' AND config->>'kind' IS DISTINCT FROM 'followup' "
+            f"ORDER BY started_at DESC LIMIT 1",
             incident_id,
         )
         return _run_dict(r) if r else None

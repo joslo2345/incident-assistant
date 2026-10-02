@@ -8,10 +8,11 @@ Failures go back to the model as a tool error so it can correct them (bounded re
 
 from __future__ import annotations
 
+import re
 import uuid
 from datetime import UTC, datetime
 
-from pydantic import Field, ValidationError
+from pydantic import BaseModel, Field, ValidationError
 
 from agent.llm import ToolSpec
 from agent.tools import Args, ToolContext, json_schema
@@ -122,3 +123,84 @@ def check(
         created_at=datetime.now(UTC),
     )
     return diagnosis, []
+
+
+ANSWER = "submit_answer"
+
+
+class SubmitAnswer(Args):
+    answer: str = Field(min_length=1, max_length=4000)
+    citations: list[str] = Field(
+        default_factory=list, max_length=10,
+        description="chunk_ids returned by the tools that the answer relies on",
+    )  # fmt: skip
+    evidence_ids: list[str] = Field(
+        default_factory=list, max_length=20,
+        description="the incident's evidence items the answer refers to",
+    )  # fmt: skip
+
+
+class Answer(BaseModel):
+    """A follow-up answer, held to the same rule as a diagnosis: only real citations."""
+
+    answer: str
+    citations: list[Citation]
+    evidence_ids: list[str]
+    model: str
+    trace_id: uuid.UUID
+
+
+ANSWER_SPEC = ToolSpec(
+    ANSWER,
+    "Submit the answer to the operator's question. Call it once, when you can answer.",
+    json_schema(SubmitAnswer),
+)
+
+
+def check_answer(
+    arguments: dict[str, object] | None,
+    incident: Incident,
+    ctx: ToolContext,
+    model: str,
+    run_id: uuid.UUID,
+) -> tuple[Answer | None, list[str]]:
+    if arguments is None:
+        return None, ["arguments were not valid JSON"]
+    try:
+        sub = SubmitAnswer.model_validate(arguments)
+    except ValidationError as exc:
+        return None, [
+            f"{'.'.join(map(str, e['loc'])) or 'arguments'}: {e['msg']}" for e in exc.errors()
+        ]
+    problems = []
+    known = {e.evidence_id for e in incident.evidence}
+    if unknown := [e for e in sub.evidence_ids if e not in known]:
+        problems.append(f"evidence_ids not on this incident: {unknown}")
+    if unseen := [c for c in sub.citations if c not in ctx.seen_chunks]:
+        problems.append(f"citations must be chunk_ids a tool returned in this run: {unseen}")
+    if problems:
+        return None, problems
+    return Answer(
+        answer=sub.answer.strip(),
+        citations=[Citation(chunk_id=c, doc_id=ctx.seen_chunks[c].doc_id)
+                   for c in dict.fromkeys(sub.citations)],
+        evidence_ids=list(dict.fromkeys(sub.evidence_ids)),
+        model=model[:128],
+        trace_id=run_id,
+    ), []  # fmt: skip
+
+
+_CLAIMED = re.compile(r"^\s*(citations|evidence_ids)\s*:.*$", re.IGNORECASE | re.MULTILINE)
+
+
+def answer_from_text(text: str, model: str, run_id: uuid.UUID) -> Answer | None:
+    """A chat reply written as plain text: keep the prose, drop any citations it claims (they
+    weren't checked, so they aren't shown as sources)."""
+    lines = text.strip().splitlines()
+    if lines and lines[0].strip() == ANSWER:  # "submit_answer" written as a heading
+        lines = lines[1:]
+    prose = _CLAIMED.sub("", "\n".join(lines)).strip()
+    if len(prose) < 2:
+        return None
+    return Answer(answer=prose[:4000], citations=[], evidence_ids=[], model=model[:128],
+                  trace_id=run_id)  # fmt: skip

@@ -24,7 +24,7 @@ jobs:
       - run: uv sync --frozen
       - run: uv run ruff check --output-format=github .
       - run: uv run ruff format --check .
-      - run: uv run mypy libs services replayer scripts tests
+      - run: uv run mypy libs services harness replayer scripts tests
       - run: uv run pytest
       - run: uv run python scripts/export_schemas.py --check
 
@@ -39,13 +39,14 @@ jobs:
           - { name: detector, dir: services/detector, package: incident-detector }
           - { name: knowledge, dir: services/knowledge, package: incident-knowledge }
           - { name: agent, dir: services/agent, package: incident-agent }
+          - { name: web, file: deploy/docker/web.Dockerfile }
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069  # v4.4.1
       - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc  # v7.4.0
         with:
           context: .
-          file: deploy/docker/python-service.Dockerfile
+          file: ${{ matrix.service.file || 'deploy/docker/python-service.Dockerfile' }}
           build-args: |
             SERVICE_DIR=${{ matrix.service.dir }}
             PACKAGE=${{ matrix.service.package }}
@@ -60,6 +61,23 @@ jobs:
           aquasec/trivy:0.74.0 image --quiet --ignore-unfixed
           --severity HIGH,CRITICAL --exit-code 1
           incident-assistant/${{ matrix.service.name }}:ci
+
+  web:
+    name: Web UI (typecheck, build, audit)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v7.0.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - run: npm run build
+      - run: npm audit --omit=dev --audit-level=high
 
   security:
     name: Secrets and dependency audit

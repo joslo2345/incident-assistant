@@ -1,20 +1,12 @@
 import json
 import uuid
-from dataclasses import dataclass
-from typing import Any
 
 from agent_testkit import INCIDENT_ID, NODE, RUNBOOK, call, toolbox, turn, valid_submission
-from fastapi.testclient import TestClient
 from mcp import Client
+from web_testkit import app_client
 
-from agent.app import Services, create_app
-from agent.data import DecisionError
 from agent.diagnosis import SUBMIT
-from agent.llm import ScriptedProvider
-from agent.loop import Investigator
 from agent.mcp_server import build_server
-from agent.runtime import Settings
-from agent.trace import MemoryTraceStore
 
 
 async def test_mcp_lists_tools_with_hints_and_serves_calls() -> None:
@@ -46,51 +38,12 @@ async def test_mcp_lists_tools_with_hints_and_serves_calls() -> None:
     assert approvals.rows[0]["status"] == "pending"
 
 
-@dataclass
-class FakeReader:
-    async def run(self, run_id: uuid.UUID) -> dict[str, Any] | None:
-        return None
-
-    async def latest_diagnosis(self, incident_id: uuid.UUID) -> dict[str, Any] | None:
-        return None
-
-    async def next_uninvestigated(self, detector_run: str) -> uuid.UUID | None:
-        return None
-
-
-@dataclass
-class FakeDecider:
-    decided: list[tuple[uuid.UUID, bool, str]]
-
-    async def decide(
-        self, request_id: uuid.UUID, approve: bool, decided_by: str, note: str | None
-    ) -> dict[str, Any]:
-        if decided_by.startswith("agent"):
-            raise DecisionError("an approval must be decided by a person other than the requester")
-        self.decided.append((request_id, approve, decided_by))
-        return {"request_id": str(request_id), "status": "approved" if approve else "rejected"}
-
-
-AGENT, APPROVER = {"X-API-Key": "agent-key"}, {"X-API-Key": "approver-key"}
-
-
-def client(script: list[Any]) -> tuple[TestClient, FakeDecider]:
-    tb, data, _, approvals = toolbox()
-    decider = FakeDecider([])
-    provider = ScriptedProvider(script)
-    services = Services(
-        data, approvals, FakeReader(),
-        lambda: Investigator(provider, tb, approvals, MemoryTraceStore()), decider,
-    )  # fmt: skip
-    settings = Settings(
-        api_keys=frozenset({"agent-key"}), approver_keys=frozenset({"approver-key"})
-    )
-    return TestClient(create_app(settings, services)), decider
+AGENT = {"X-API-Key": "agent-key"}
 
 
 def test_investigate_endpoint() -> None:
     search = call("search_runbooks", {"query": "fan failure"})
-    c, _ = client([turn(search), turn(call(SUBMIT, valid_submission()))])
+    c, *_ = app_client([turn(search), turn(call(SUBMIT, valid_submission()))])
     with c:
         assert c.post(f"/v1/incidents/{INCIDENT_ID}/investigate").status_code == 401
         missing = c.post(f"/v1/incidents/{uuid.uuid4()}/investigate", headers=AGENT)
@@ -107,17 +60,9 @@ def test_investigate_endpoint() -> None:
         assert 'agent_runs_total{provider="scripted",status="succeeded"} 1.0' in metrics
 
 
-def test_only_approvers_can_decide() -> None:
-    c, decider = client([])
-    rid = uuid.uuid4()
-    body = {"decision": "approve", "decided_by": "alice"}
+def test_the_typed_name_approval_endpoint_is_gone() -> None:
+    c, *_ = app_client([])
     with c:
-        # An agent key is not an approver key.
-        assert c.post(f"/v1/approvals/{rid}/decision", json=body, headers=AGENT).status_code == 401
-        r = c.post(f"/v1/approvals/{rid}/decision", json=body, headers=APPROVER)
-        assert r.status_code == 200 and r.json()["status"] == "approved"
-        for name in ("agent-x", "Agent:x", " AGENT"):
-            bad = c.post(f"/v1/approvals/{rid}/decision",
-                         json={**body, "decided_by": name}, headers=APPROVER)  # fmt: skip
-            assert bad.status_code == 422, name
-    assert decider.decided == [(rid, True, "alice")]
+        r = c.post(f"/v1/approvals/{uuid.uuid4()}/decision",
+                   json={"decision": "approve", "decided_by": "alice"}, headers=AGENT)  # fmt: skip
+        assert r.status_code in {404, 405}

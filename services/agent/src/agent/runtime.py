@@ -28,7 +28,8 @@ class Settings:
     knowledge_url: str = "http://localhost:8001"
     knowledge_api_key: str = ""
     api_keys: frozenset[str] = field(default_factory=frozenset)
-    approver_keys: frozenset[str] = field(default_factory=frozenset)
+    slack_bot_keys: frozenset[str] = field(default_factory=frozenset)
+    secure_cookies: bool = False  # True behind TLS (A8); the local stack is plain HTTP
     watch: bool = False
     watch_interval_s: float = 30.0
     watch_detector_run: str = "live"
@@ -51,7 +52,8 @@ class Settings:
             knowledge_url=os.environ.get("KNOWLEDGE_URL", cls.knowledge_url),
             knowledge_api_key=os.environ.get("KNOWLEDGE_API_KEY", ""),
             api_keys=keys("AGENT_API_KEYS"),
-            approver_keys=keys("APPROVER_API_KEYS"),
+            slack_bot_keys=keys("SLACK_BOT_API_KEYS"),
+            secure_cookies=os.environ.get("AGENT_SECURE_COOKIES", "false").lower() == "true",
             watch=os.environ.get("AGENT_WATCH", "false").lower() in {"1", "true", "yes"},
             watch_interval_s=float(os.environ.get("AGENT_WATCH_INTERVAL_S", 30)),
             watch_detector_run=os.environ.get("AGENT_WATCH_RUN", "live"),
@@ -69,6 +71,7 @@ class Runtime:
     traces: PgTraceStore
     provider: Provider
     decider: ApprovalDecider | None
+    knowledge_http: httpx2.AsyncClient
 
     def investigator(self) -> Investigator:
         return Investigator(
@@ -103,6 +106,7 @@ async def open_runtime(
             traces=PgTraceStore(pool),
             provider=provider or provider_from_env(),
             decider=ApprovalDecider(approver_pool) if approver_pool else None,
+            knowledge_http=http,
         )
     finally:
         await http.aclose()

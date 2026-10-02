@@ -33,6 +33,12 @@ def api(path: str, body: dict[str, Any] | None = None, key: str = "AGENT_API_KEY
         return json.load(resp)
 
 
+COMPOSE_EXEC = [
+    "docker", "compose", "-f", str(REPO / "deploy" / "compose.yaml"), "exec", "-T", "timescaledb",
+    "psql", "-U", "postgres", "-d", "telemetry", "-v", "ON_ERROR_STOP=1",
+]  # fmt: skip
+
+
 def as_role(role: str, statement: str) -> subprocess.CompletedProcess[str]:
     """Run a statement as a service role (via SET ROLE, so no password is needed here)."""
     from .conftest import COMPOSE
@@ -137,3 +143,38 @@ def test_injected_fault_gets_a_cited_diagnosis() -> None:
     # A state-changing recommendation exists only as a pending request.
     if diagnosis["recommended_action"]["action"] in {"drain_node", "reset_gpu"}:
         assert result["approval_request"]["status"] == "pending"
+
+
+def test_audit_log_is_append_only_and_records_every_decision() -> None:
+    node = f"it-audit-{secrets.token_hex(3)}"
+    rid = sql(
+        "INSERT INTO approval_requests (request_id, action, node_id, reason, requested_by) "
+        f"VALUES (gen_random_uuid(), 'drain_node', '{node}', 'test', 'agent:test') "
+        "RETURNING request_id"
+    ).splitlines()[0]
+    ok = as_role("approval_service", f"UPDATE approval_requests SET status = 'approved', "
+                 f"decided_by = 'alice' WHERE request_id = '{rid}'")  # fmt: skip
+    assert ok.returncode == 0, ok.stderr
+    events = sql(f"SELECT event || ':' || actor FROM approval_audit WHERE request_id = '{rid}' "
+                 "ORDER BY id")  # fmt: skip
+    assert events.splitlines() == ["requested:agent:test", "approved:alice"]
+    for statement in (f"UPDATE approval_audit SET actor = 'mallory' WHERE request_id = '{rid}'",
+                      f"DELETE FROM approval_audit WHERE request_id = '{rid}'"):  # fmt: skip
+        denied = as_role("incident_agent", statement)
+        assert denied.returncode != 0, statement
+    # Even the superuser can't rewrite history (the trigger, not just grants).
+    rewrite = subprocess.run(
+        [*COMPOSE_EXEC, "-c", f"UPDATE approval_audit SET actor = 'x' WHERE request_id = '{rid}'"],
+        capture_output=True, text=True,
+    )  # fmt: skip
+    assert "append-only" in rewrite.stderr
+
+
+def test_accounts_cannot_be_named_like_agents() -> None:
+    for name in ("agent", "agent-ops", "Agent:x"):
+        insert = (
+            "INSERT INTO users (username, display_name, role, password_hash) "
+            f"VALUES (lower('{name}'), 'x', 'approver', 'scrypt$00$00')"
+        )
+        r = as_role("incident_agent", insert)
+        assert r.returncode != 0, name

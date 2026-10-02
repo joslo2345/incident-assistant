@@ -187,12 +187,12 @@ services:
     environment:
       # Reads telemetry and incidents, writes traces, can only *file* approval requests.
       DATABASE_URL: postgresql://incident_agent:${AGENT_DB_PASSWORD:?run `make env` first}@timescaledb:5432/telemetry
-      # Used only by the decision endpoint (approver key required); can't file requests.
+      # Used only for decisions by logged-in approvers (agent.web); can't file requests.
       APPROVAL_DATABASE_URL: postgresql://approval_service:${APPROVAL_DB_PASSWORD:?run `make env` first}@timescaledb:5432/telemetry
       KNOWLEDGE_URL: http://knowledge:8001
       KNOWLEDGE_API_KEY: ${KNOWLEDGE_API_KEY:?run `make env` first}
       AGENT_API_KEYS: ${AGENT_API_KEY:?run `make env` first}
-      APPROVER_API_KEYS: ${APPROVER_API_KEY:?run `make env` first}
+      SLACK_BOT_API_KEYS: ${SLACK_BOT_API_KEY:?run `make env` first}
       # Default model: Qwen3 30B-A3B served by Ollama on the host (`make model`), because Docker
       # on macOS has no GPU access. Any OpenAI-compatible server works (vLLM in B5);
       # AGENT_PROVIDER=anthropic uses Claude when ANTHROPIC_API_KEY is set.
@@ -206,6 +206,22 @@ services:
       knowledge: { condition: service_healthy }
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8002/healthz')"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ..
+      dockerfile: deploy/docker/web.Dockerfile
+    image: incident-assistant/web:dev
+    ports:
+      - "127.0.0.1:3001:8080"
+    depends_on:
+      agent: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/"]
       interval: 5s
       timeout: 3s
       retries: 10
