@@ -1,0 +1,118 @@
+# Incident Assistant Helm values. One release per namespace: services keep their short names
+# (agent, knowledge, ...) because the services and the web UI's nginx address each other by them.
+
+image:
+  # Prefix for the service images, e.g. "myregistry.azurecr.io/". Empty: local images (kind load).
+  registry: ""
+  repository: incident-assistant   # images are <registry><repository>/<service>:<tag>
+  tag: dev
+  pullPolicy: IfNotPresent
+
+secrets:
+  # A Secret in this namespace holding the keys listed in docs/INSTALL.md. Never put values here.
+  existingSecret: incident-assistant-secrets
+  externalSecrets:
+    # Render an ExternalSecret that fills existingSecret from a cloud secret manager
+    # (External Secrets Operator must be installed; see infra/azure for Key Vault).
+    enabled: false
+    secretStoreRef:
+      kind: ClusterSecretStore
+      name: azure-keyvault
+    refreshInterval: 1h
+    # Key Vault secret names are <prefix><key in lower-kebab-case>, e.g. ia-agent-db-password.
+    remoteKeyPrefix: ia-
+
+postgres:
+  # In-cluster TimescaleDB (dev and small installs) or an external managed Postgres with the
+  # timescaledb and vector extensions allow-listed (Azure Database for PostgreSQL Flexible Server).
+  inCluster: true
+  host: timescaledb
+  port: 5432
+  database: telemetry
+  adminUser: postgres
+  sslmode: disable          # use "require" for a managed server
+  image: timescale/timescaledb:2.30.2-pg17
+  storage: 10Gi
+  storageClassName: ""
+  resources:
+    requests: { cpu: 250m, memory: 512Mi }
+    limits: { memory: 2Gi }
+
+redpanda:
+  image: redpandadata/redpanda:v26.2.3
+  storage: 5Gi
+  storageClassName: ""
+  resources:
+    requests: { cpu: 250m, memory: 1Gi }
+    limits: { memory: 1536Mi }
+
+# The investigation model: any OpenAI-compatible endpoint (Ollama, vLLM) or Anthropic.
+model:
+  provider: openai_compat      # or "anthropic" (needs ANTHROPIC_API_KEY in the Secret)
+  baseUrl: http://host.docker.internal:11434/v1   # kind on Docker Desktop: the Mac's Ollama
+  name: qwen3-agent
+
+ingest:
+  replicas: 2
+  service:
+    type: ClusterIP
+    nodePort: null
+  resources:
+    requests: { cpu: 100m, memory: 128Mi }
+    limits: { memory: 256Mi }
+
+consumer:
+  replicas: 1                  # scales with Kafka partitions (8)
+  resources:
+    requests: { cpu: 100m, memory: 192Mi }
+    limits: { memory: 512Mi }
+
+detector:
+  # Live detection keeps per-GPU state in memory: exactly one replica.
+  resources:
+    requests: { cpu: 100m, memory: 256Mi }
+    limits: { memory: 768Mi }
+
+knowledge:
+  replicas: 1
+  resources:
+    requests: { cpu: 250m, memory: 768Mi }
+    limits: { memory: 1536Mi }
+
+agent:
+  # The watcher investigates new incidents; one replica avoids duplicate investigations.
+  watch: true
+  secureCookies: false         # true when the web UI is served over TLS
+  resources:
+    requests: { cpu: 100m, memory: 256Mi }
+    limits: { memory: 512Mi }
+
+web:
+  replicas: 2
+  resources:
+    requests: { cpu: 25m, memory: 32Mi }
+    limits: { memory: 128Mi }
+  service:
+    type: ClusterIP
+    nodePort: null
+  ingress:
+    enabled: false
+    className: ""
+    host: incidents.example.com
+    tlsSecretName: ""          # cert-manager or a pre-provisioned certificate
+    annotations: {}
+
+slackBot:
+  enabled: false               # needs SLACK_BOT_TOKEN and SLACK_APP_TOKEN in the Secret
+  channel: ""
+  webUrl: ""
+  resources:
+    requests: { cpu: 25m, memory: 128Mi }
+    limits: { memory: 256Mi }
+
+networkPolicy:
+  enabled: true
+  # Who may reach the web UI and the ingest API (NetworkPolicy "from" entries, e.g. the ingress
+  # controller's namespace). Empty = any source, on that service's port only.
+  webFrom: []
+  ingestFrom: []

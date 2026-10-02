@@ -28,6 +28,9 @@ policies, image signing) is work package **A8**.
 | Supply chain | `uv.lock` pins every dependency; GitHub Actions pinned to commit SHAs; Dependabot for Python, Actions, Docker; the trace download is checksum-verified |
 | CI | gitleaks (full history), pip-audit, Trivy config scan, and a Trivy image scan that fails on fixable HIGH/CRITICAL vulnerabilities |
 
+| Kubernetes (A8) | Pods non-root, read-only root filesystems, no capabilities, RuntimeDefault seccomp, no service-account tokens; requests, limits and probes everywhere; NetworkPolicies deny ingress by default (Calico-tested: 5 unneeded paths blocked), data stores have no egress beyond DNS |
+| Cloud (A8, written, not applied) | Entra RBAC and no local accounts on AKS; API server and Key Vault limited to admin IPs; Postgres private with TLS required; secrets generated into Key Vault and synced by External Secrets with workload identity; GitHub deploys through OIDC (no stored credentials); CI scans the Terraform and chart (Trivy: 0 HIGH/CRITICAL) and every pushed image |
+
 ## Review log
 
 **2026-10-01, before A3.** Scanned with gitleaks, pip-audit, Trivy (images and config) and

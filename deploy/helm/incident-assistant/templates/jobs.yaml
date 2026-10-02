@@ -1,0 +1,101 @@
+{{- $v := .Values }}
+# Jobs are named per release revision, so `helm upgrade` runs them again (Job specs are immutable).
+# They retry (backoffLimit) until the database and broker are up.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: migrate-{{ .Release.Revision }}
+  labels: {{- include "ia.labels" . | nindent 4 }}
+spec:
+  backoffLimit: 20
+  ttlSecondsAfterFinished: 86400
+  template:
+    metadata:
+      labels: {{- include "ia.selector" "migrate" | nindent 8 }}
+    spec:
+      restartPolicy: OnFailure
+      {{- include "ia.podSecurity" . | nindent 6 }}
+      initContainers:
+        {{- include "ia.waitForTcp" (dict "host" $v.postgres.host "port" $v.postgres.port "image" "consumer" "ctx" $) | nindent 8 }}
+      containers:
+        - name: migrate
+          image: {{ include "ia.image" (dict "name" "consumer" "ctx" $) }}
+          imagePullPolicy: {{ $v.image.pullPolicy }}
+          command: ["python", "-m", "consumer.migrate"]
+          env:
+            {{- include "ia.dbEnv" (dict "user" $v.postgres.adminUser "passKey" "POSTGRES_PASSWORD" "ctx" $) | nindent 12 }}
+            {{- range list "CONSUMER_DB_PASSWORD" "GRAFANA_DB_PASSWORD" "DETECTOR_DB_PASSWORD" "KNOWLEDGE_DB_PASSWORD" "AGENT_DB_PASSWORD" "APPROVAL_DB_PASSWORD" }}
+            {{- include "ia.secretEnv" (dict "key" . "ctx" $) | nindent 12 }}
+            {{- end }}
+          resources: { requests: { cpu: 50m, memory: 128Mi }, limits: { memory: 256Mi } }
+          {{- include "ia.containerSecurity" . | nindent 10 }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: topics-{{ .Release.Revision }}
+  labels: {{- include "ia.labels" . | nindent 4 }}
+spec:
+  backoffLimit: 20
+  ttlSecondsAfterFinished: 86400
+  template:
+    metadata:
+      labels: {{- include "ia.selector" "topics" | nindent 8 }}
+    spec:
+      restartPolicy: OnFailure
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 101
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: topics
+          image: {{ $v.redpanda.image }}
+          command: ["/bin/bash", "-c"]
+          args:
+            - >-
+              rpk -X brokers=redpanda:9092 topic describe telemetry.raw >/dev/null 2>&1 ||
+              rpk -X brokers=redpanda:9092 topic create telemetry.raw -p 8 -r 1 -c retention.ms=604800000;
+              rpk -X brokers=redpanda:9092 topic describe telemetry.dlq >/dev/null 2>&1 ||
+              rpk -X brokers=redpanda:9092 topic create telemetry.dlq -p 1 -r 1 -c retention.ms=2592000000;
+              rpk -X brokers=redpanda:9092 topic list | grep -q telemetry.raw
+          env:
+            - { name: HOME, value: /tmp }
+          resources: { requests: { cpu: 10m, memory: 32Mi }, limits: { memory: 128Mi } }
+          {{- include "ia.containerSecurity" . | nindent 10 }}
+          volumeMounts: [{ name: tmp, mountPath: /tmp }]
+      volumes: {{- include "ia.tmp" . | nindent 8 }}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: kb-ingest-{{ .Release.Revision }}
+  labels: {{- include "ia.labels" . | nindent 4 }}
+spec:
+  backoffLimit: 20
+  ttlSecondsAfterFinished: 86400
+  template:
+    metadata:
+      labels: {{- include "ia.selector" "kb-ingest" | nindent 8 }}
+    spec:
+      restartPolicy: OnFailure
+      {{- include "ia.podSecurity" . | nindent 6 }}
+      initContainers:
+        {{- include "ia.waitForDb" (dict "user" "knowledge_service" "passKey" "KNOWLEDGE_DB_PASSWORD" "image" "knowledge" "ctx" $) | nindent 8 }}
+      containers:
+        - name: kb-ingest
+          image: {{ include "ia.image" (dict "name" "knowledge" "ctx" $) }}
+          imagePullPolicy: {{ $v.image.pullPolicy }}
+          command: ["knowledge", "ingest", "--corpus", "/app/corpus"]
+          env:
+            {{- include "ia.dbEnv" (dict "user" "knowledge_service" "passKey" "KNOWLEDGE_DB_PASSWORD" "ctx" $) | nindent 12 }}
+            - { name: FASTEMBED_CACHE_DIR, value: /models }
+            - { name: HF_HOME, value: /models/hf }
+            - { name: HF_HUB_DISABLE_TELEMETRY, value: "1" }
+          resources: { requests: { cpu: 250m, memory: 768Mi }, limits: { memory: 1536Mi } }
+          {{- include "ia.containerSecurity" . | nindent 10 }}
+          volumeMounts: [{ name: models, mountPath: /models }, { name: tmp, mountPath: /tmp }]
+      volumes:
+        - name: models
+          emptyDir: { sizeLimit: 2Gi }
+        {{- include "ia.tmp" . | nindent 8 }}

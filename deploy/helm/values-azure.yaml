@@ -1,0 +1,38 @@
+# Values for AKS provisioned by infra/azure. Placeholders in <> come from `terraform output`.
+# Written and reviewed but not yet applied to a real subscription (see docs/INSTALL.md).
+image:
+  registry: <acr_login_server>/      # e.g. incidentassistantacr.azurecr.io/
+  tag: <git sha>                     # set by the deploy workflow
+  pullPolicy: IfNotPresent
+
+secrets:
+  existingSecret: incident-assistant-secrets
+  externalSecrets:
+    enabled: true                    # Key Vault -> Secret, via workload identity
+    secretStoreRef: { kind: ClusterSecretStore, name: azure-keyvault }
+
+postgres:
+  inCluster: false                   # Azure Database for PostgreSQL Flexible Server
+  host: <postgres_host>
+  adminUser: iaadmin
+  sslmode: require
+
+model:
+  # Your laptop's Ollama, reachable from the cluster over a private tunnel (e.g. the Tailscale
+  # Kubernetes operator's egress proxy). Or any OpenAI-compatible endpoint, or Anthropic.
+  provider: openai_compat
+  baseUrl: http://ollama-egress.tailscale.svc.cluster.local:11434/v1
+  name: qwen3-agent
+
+agent:
+  secureCookies: true                # served over TLS by the ingress
+
+web:
+  ingress:
+    enabled: true
+    className: webapprouting.kubernetes.azure.com   # AKS app routing add-on, or your own
+    host: incidents.example.com
+    tlsSecretName: incidents-tls
+
+networkPolicy:
+  enabled: true

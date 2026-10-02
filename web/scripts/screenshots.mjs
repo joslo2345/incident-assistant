@@ -5,7 +5,7 @@ import { readFileSync } from "node:fs";
 import { chromium } from "playwright";
 
 const BASE = process.env.BASE ?? "http://localhost:3001";
-const OUT = new URL("../../docs/images/", import.meta.url).pathname;
+const OUT = process.env.OUT ?? new URL("../../docs/images/", import.meta.url).pathname;
 const env = Object.fromEntries(
   readFileSync(new URL("../../deploy/.env", import.meta.url), "utf8")
     .split("\n").filter((l) => l.includes("=") && !l.startsWith("#")).map((l) => [l.slice(0, l.indexOf("=")), l.slice(l.indexOf("=") + 1)]),
@@ -40,7 +40,8 @@ const href = process.env.INCIDENT
   ? `/incidents/${process.env.INCIDENT}`
   : await page.getByRole("link", { name: /Thermal runaway/ }).first().getAttribute("href");
 await page.goto(`${BASE}${href}`);
-await page.getByText("Recommended:").waitFor();
+// Diagnosed already, or brand new (e.g. a fresh install): either is fine here.
+await page.getByText(/Recommended:|Not investigated yet/).first().waitFor();
 await page.waitForTimeout(1500); // charts
 await page.screenshot({ path: `${OUT}03-incident.jpg`, fullPage: true, type: "jpeg", quality: 75 });
 log("incident detail", href);

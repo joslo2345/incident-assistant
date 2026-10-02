@@ -166,6 +166,19 @@ stack on a 10-incident set: tools, validation and scoring run for real, and the 
 run breaks, tool errors rise, or scores drop below the recording (`make eval-ci-record` after an
 intended change).
 
+## Kubernetes and Azure
+
+`deploy/helm/incident-assistant` installs everything on Kubernetes (hardened pods, NetworkPolicies,
+External Secrets support); `infra/azure` is Terraform for AKS, Postgres, ACR, Key Vault and keyless
+GitHub deploys. See **[docs/INSTALL.md](docs/INSTALL.md)**: the local path is tested end to end;
+the Azure path is validated but not yet applied.
+
+```sh
+make kind-up && make kind-install   # local Kubernetes in under 2 minutes
+scripts/k8s_smoke.sh                # replay faults and detect them in the cluster
+make kind-down
+```
+
 ## Telemetry replayer
 
 `replayer/` turns a day of real GPU-cluster load ([Alibaba cluster-trace-gpu-v2020](https://github.com/alibaba/clusterdata/tree/master/cluster-trace-gpu-v2020),

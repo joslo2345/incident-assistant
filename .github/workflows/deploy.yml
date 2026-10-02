@@ -1,0 +1,59 @@
+name: Deploy to AKS
+
+# Manual, into the protected "production" environment. Azure login is OIDC: GitHub issues a
+# short-lived token for this repo and environment, Entra ID trusts it (infra/azure identity.tf).
+# No client secret or kubeconfig exists anywhere. helm runs through `az aks command invoke`,
+# so the API server can stay closed to everyone but admins (authorized IP ranges).
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      TAG: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      - uses: azure/login@a641126d1b8aa4d1fa005f4f92df94a3a4c4c906  # v3.1.0
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      - name: Build and push images
+        run: |
+          az acr login --name "${{ vars.ACR_LOGIN_SERVER }}"
+          for s in ingest consumer detector knowledge agent; do
+            pkg="incident-$s"
+            docker build -f deploy/docker/python-service.Dockerfile \
+              --build-arg SERVICE_DIR=services/$s --build-arg PACKAGE=$pkg \
+              -t "${{ vars.ACR_LOGIN_SERVER }}/incident-assistant/$s:$TAG" .
+            docker push "${{ vars.ACR_LOGIN_SERVER }}/incident-assistant/$s:$TAG"
+          done
+          docker build -f deploy/docker/web.Dockerfile -t "${{ vars.ACR_LOGIN_SERVER }}/incident-assistant/web:$TAG" .
+          docker push "${{ vars.ACR_LOGIN_SERVER }}/incident-assistant/web:$TAG"
+      - name: Scan pushed images (fail on fixable HIGH/CRITICAL)
+        run: |
+          for s in ingest consumer detector knowledge agent web; do
+            docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:0.74.0 \
+              image --quiet --ignore-unfixed --severity HIGH,CRITICAL --exit-code 1 \
+              "${{ vars.ACR_LOGIN_SERVER }}/incident-assistant/$s:$TAG"
+          done
+      - name: helm upgrade (through the AKS control plane)
+        run: |
+          az aks command invoke \
+            --resource-group "${{ vars.AZURE_RESOURCE_GROUP }}" --name "${{ vars.AKS_NAME }}" \
+            --file deploy/helm \
+            --command "helm upgrade --install ia incident-assistant -n ia --create-namespace \
+              -f values-azure.yaml \
+              --set image.registry=${{ vars.ACR_LOGIN_SERVER }}/ --set image.tag=$TAG \
+              --set postgres.host=${{ vars.POSTGRES_HOST }} \
+              --wait --wait-for-jobs --timeout 15m"
