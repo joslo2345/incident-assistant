@@ -67,8 +67,12 @@ telemetry that is present, and lower your confidence when key data is absent.
 - Use unknown when the evidence does not support a cause.
 - Citations must be chunk_ids that a tool returned in this investigation. Cite the runbook \
 section that supports your recommended action.
-- Recommend drain_node or reset_gpu only when the evidence shows the hardware is failing; both go \
-to a human for approval. Prefer monitor or none for workload behaviour.
+- Choose the action from the Remediation section of the runbook for your root cause (search for \
+it if you have not seen it), and cite that section. When the runbook says to drain, reset or \
+replace a part, recommend that: a real fault answered with monitor or none stays in service.
+- Use monitor or none only for noisy_neighbor, or when you are not confident the hardware is \
+faulty (and then say so and lower your confidence). drain_node and reset_gpu go to a human for \
+approval before anything happens.
 """
 
 
