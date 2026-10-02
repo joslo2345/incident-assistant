@@ -1,9 +1,9 @@
-"""Agent API: investigate an incident, read run traces and diagnoses, and decide approval
-requests. With AGENT_WATCH=true it also investigates new live incidents on its own.
+"""Agent API: investigate an incident and read run traces and diagnoses (machine clients, with
+AGENT_API_KEYS), plus the routes for people in agent.web (web UI and Slack bot, with user
+sessions). With AGENT_WATCH=true it also investigates new live incidents on its own.
 
-Two kinds of credentials: AGENT_API_KEYS for clients of the agent, APPROVER_API_KEYS for people
-deciding approval requests. An agent key can't decide, and the decision itself runs as a
-database role that can't file requests (migration 007).
+Approval decisions are made only by logged-in people with the approver role (agent.web), and run
+as a database role that can't file requests (migration 007).
 """
 
 from __future__ import annotations
@@ -13,19 +13,21 @@ import contextlib
 import logging
 import secrets
 import uuid
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import dataclass
 from typing import Annotated, Any, Literal, Protocol
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Response, status
 from fastapi.security import APIKeyHeader
 from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_latest
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel
 from starlette.requests import Request
 
-from agent.data import Approvals, DecisionError, FleetData
+from agent.data import Approvals, FleetData
 from agent.loop import Investigator, RunResult
+from agent.people import People
 from agent.runtime import Settings
+from agent.web import build_router
 from incident_contracts import SCHEMA_VERSION, Diagnosis
 from incident_contracts.api import HealthResponse
 
@@ -40,7 +42,6 @@ RUN_SECONDS = Histogram(
 )
 TOKENS = Counter("agent_tokens_total", "Model tokens", ["direction"])
 COST = Counter("agent_cost_usd_total", "Model cost in USD")
-APPROVALS = Counter("agent_approval_decisions_total", "Approval decisions", ["decision"])
 
 
 class TraceReader(Protocol):
@@ -62,6 +63,8 @@ class Services:
     reader: TraceReader
     investigator: Callable[[], Investigator]
     decider: Decider | None
+    people: People
+    knowledge_client: Any = None  # httpx2.AsyncClient for the knowledge API (cited passages)
 
 
 class InvestigateResponse(BaseModel):
@@ -81,20 +84,6 @@ class InvestigateResponse(BaseModel):
     error: str | None
 
 
-class DecisionRequest(BaseModel):
-    decision: Literal["approve", "reject"]
-    decided_by: str = Field(min_length=2, max_length=100, pattern=r"^[A-Za-z0-9._@ -]+$")
-    note: str | None = Field(default=None, max_length=2000)
-
-    @field_validator("decided_by")
-    @classmethod
-    def _a_person(cls, v: str) -> str:
-        # The database trigger enforces this too; reject early with a clear message.
-        if v.strip().lower().startswith("agent"):
-            raise ValueError("decisions are made by people, not agents")
-        return v.strip()
-
-
 def _auth(keys: Callable[[Settings], frozenset[str]]) -> Callable[..., str]:
     def check(request: Request, key: Annotated[str | None, Depends(_key_header)]) -> str:
         allowed = keys(request.app.state.settings)
@@ -106,7 +95,6 @@ def _auth(keys: Callable[[Settings], frozenset[str]]) -> Callable[..., str]:
 
 
 AgentAuth = Annotated[str, Depends(_auth(lambda s: s.api_keys))]
-ApproverAuth = Annotated[str, Depends(_auth(lambda s: s.approver_keys))]
 
 
 def to_response(r: RunResult) -> InvestigateResponse:
@@ -126,14 +114,19 @@ def create_app(settings: Settings | None = None, services: Services | None = Non
     # One investigation at a time: a local model serves one request at a time anyway.
     lock = asyncio.Lock()
 
+    async def run_exclusive(work: Callable[[], Awaitable[Any]]) -> Any:
+        async with lock:
+            return await work()
+
     async def investigate(incident_id: uuid.UUID) -> RunResult | None:
         svc: Services = state["services"]
         incident = await svc.data.incident(incident_id)
         if incident is None:
             return None
-        async with lock:
-            with RUN_SECONDS.time():
-                result = await svc.investigator().investigate(incident)
+        with RUN_SECONDS.time():
+            result: RunResult = await run_exclusive(
+                lambda: svc.investigator().investigate(incident)
+            )
         RUNS.labels(result.run.status, result.run.provider).inc()
         TOKENS.labels("input").inc(result.run.input_tokens)
         TOKENS.labels("output").inc(result.run.output_tokens)
@@ -157,13 +150,15 @@ def create_app(settings: Settings | None = None, services: Services | None = Non
     async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         async with contextlib.AsyncExitStack() as stack:
             if state["services"] is None:
+                from agent.people import PgPeople
                 from agent.runtime import open_runtime
                 from agent.trace import PgTraceReader
 
                 rt = await stack.enter_async_context(open_runtime(settings))
                 state["services"] = Services(
-                    rt.data, rt.approvals, PgTraceReader(rt.pool), rt.investigator, rt.decider
-                )
+                    rt.data, rt.approvals, PgTraceReader(rt.pool), rt.investigator, rt.decider,
+                    PgPeople(rt.pool), rt.knowledge_http,
+                )  # fmt: skip
             watcher = asyncio.create_task(watch()) if settings.watch else None
             try:
                 yield
@@ -220,21 +215,7 @@ def create_app(settings: Settings | None = None, services: Services | None = Non
     ) -> list[dict[str, Any]]:
         return await svc().approvals.list(status_, 100)
 
-    @app.post("/v1/approvals/{request_id}/decision", summary="Approve or reject a request")
-    async def decide(
-        request_id: uuid.UUID, body: DecisionRequest, _: ApproverAuth
-    ) -> dict[str, Any]:
-        decider = svc().decider
-        if decider is None:
-            raise HTTPException(status.HTTP_503_SERVICE_UNAVAILABLE, "Approvals not configured")
-        try:
-            row = await decider.decide(
-                request_id, body.decision == "approve", body.decided_by, body.note
-            )
-        except DecisionError as exc:
-            raise HTTPException(status.HTTP_409_CONFLICT, str(exc)) from exc
-        APPROVALS.labels(body.decision).inc()
-        return row
+    app.include_router(build_router(svc, run_exclusive))
 
     @app.get("/healthz", response_model=HealthResponse, summary="Liveness check")
     async def healthz() -> HealthResponse:

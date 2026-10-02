@@ -17,7 +17,9 @@ policies, image signing) is work package **A8**.
 | Area | Control |
 | --- | --- |
 | Knowledge API | Random API key from `deploy/.env`; answers only from retrieved sources, with citations validated server-side; the Claude key (optional) stays in `deploy/.env` |
-| Agent API | Two key sets: agent keys (investigate, read traces) and approver keys (decide). An agent key can't decide |
+| Agent API | Machine routes need an agent key. People routes need a session (login; scrypt password hashes; only a SHA-256 of the session token is stored; 12 h expiry; 5 failed logins lock an account for 5 minutes) or the Slack bot key plus a linked Slack user. Decisions need the approver role and are recorded under the logged-in username |
+| Web UI | Same origin as the API (nginx proxy, no CORS); session cookie HttpOnly + SameSite=Strict; state-changing requests need a custom header (CSRF); CSP `default-src 'self'`, frame-ancestors none, nosniff; only `/api/v1/(auth\|ui)/` is proxied |
+| Audit | `approval_audit` is written by a trigger on every request and decision and is append-only (a trigger rejects UPDATE/DELETE, even for the superuser) |
 | Agent | Seven tools, all read-only except `drain_node`, which only files a request; tool allowlist per run; arguments validated before any query; results size-capped; step, token and time budgets. The model runs locally (Ollama, 127.0.0.1 only), so incident data never leaves the machine |
 | Ingest API | API key (constant-time compare, fails closed with no keys); 10 MB body limit checked before parsing (also for chunked uploads); schema validation with unknown fields rejected; bounded in-flight events (429); errors don't expose internal details |
 | Database | Services use least-privilege roles: `telemetry_writer` (SELECT/INSERT on telemetry tables), `grafana_reader` (SELECT only, read-only transactions, 30 s statement timeout), `incident_detector` (SELECT on telemetry, read/write on `incidents` only), `knowledge_service` (read/write on `kb_chunks` only), `incident_agent` (SELECT on telemetry and incidents, writes its own traces, INSERT-only on `approval_requests`), `approval_service` (UPDATE of the decision columns of `approval_requests` only). A trigger makes decisions final and rejects self-approval. The superuser is used only by migrations. Role passwords come from the environment, never from SQL files. |
@@ -70,8 +72,8 @@ can't decide approvals, and the agent API, Ollama and Postgres listen on 127.0.0
 - The agent container holds the `approval_service` password for its decision endpoint; the agent
   loop never uses it. Splitting approvals into their own service fits A7 (UI) or A8.
 - The MCP server runs over stdio for local clients only; it has no authentication of its own.
-- `decided_by` is whatever the approver key holder types; there is no user identity yet. Real
-  identities and an audit log come with the A7 UI.
+- Accounts are local (no SSO/MFA yet) and the local stack serves the UI over plain HTTP, so the
+  session cookie isn't `Secure` (`AGENT_SECURE_COOKIES=true` behind TLS in A8).
 - `POST /investigate` blocks a model for ~2 minutes and runs one at a time, so an agent-key holder
   can queue work. Localhost-only and authenticated; rate limits belong with A8.
 - `incident_agent` can UPDATE any row of `agent_runs` (it finishes its own runs), so a compromised

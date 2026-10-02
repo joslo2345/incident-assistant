@@ -45,7 +45,8 @@ random local secrets in `deploy/.env` (gitignored). All ports are bound to local
 | Prometheus | http://localhost:9090 | metrics from ingest, consumer, Redpanda |
 | TimescaleDB | localhost:5432 | db `telemetry`; roles `postgres` (migrations), `telemetry_writer`, `grafana_reader`; passwords in `deploy/.env` |
 | Knowledge API | http://localhost:8001/docs | `/v1/search`, `/v1/ask`, `/v1/chunks/{id}`; key `KNOWLEDGE_API_KEY` in `deploy/.env` |
-| Agent API | http://localhost:8002/docs | investigate, runs and traces, approvals; keys `AGENT_API_KEY` and `APPROVER_API_KEY` in `deploy/.env` |
+| Web UI | http://localhost:3001 | incidents, diagnoses, approvals, follow-up chat, audit, feedback; `make demo-users` creates `alice` (approver) and `victor` (viewer), passwords in `deploy/.env` |
+| Agent API | http://localhost:8002/docs | investigate, runs and traces (key `AGENT_API_KEY`); people routes for the UI and Slack bot |
 | Redpanda | localhost:19092 | Kafka API; topics `telemetry.raw` (8 partitions), `telemetry.dlq` |
 
 Data flow: ingest → `telemetry.raw` → consumer → TimescaleDB (`gpu_metrics`, `xid_events`, `bmc_log`,
@@ -108,6 +109,36 @@ curl -s -X POST localhost:8002/v1/approvals/<request-id>/decision -H "X-API-Key:
 The same tools are an MCP server (`make mcp`, stdio). To try them in the MCP Inspector:
 `npx @modelcontextprotocol/inspector uv run python scripts/agent_env.py uv run agent mcp`
 (from the repo root). Seven tools; all read-only except `drain_node`, which only files a request.
+
+## Web UI and Slack bot
+
+A technician signs in, sees incidents with the agent's diagnosis, checks the evidence against the
+telemetry, opens the cited runbook passages, approves or rejects the requested action, and asks
+follow-up questions. Every decision lands in an append-only audit log; thumbs up/down on any
+diagnosis or answer feeds a report of candidate eval cases.
+
+| | |
+| --- | --- |
+| ![Incident detail](docs/images/03-incident.jpg) | ![Pending approval](docs/images/04-pending-approval.jpg) |
+| Diagnosis, cited runbook sections, GPU telemetry with the detector's signals | A fresh investigation files a drain request; only approvers see the buttons |
+| ![Approved](docs/images/06-approved.jpg) | ![Audit log](docs/images/07-audit.jpg) |
+| Decided under the signed-in user's name | Append-only audit log (written by a database trigger) |
+| ![Follow-up](docs/images/08-followup.jpg) | ![Feedback](docs/images/09-feedback.jpg) |
+| Follow-up questions run the same agent, read-only | Feedback report |
+
+```sh
+make up && make demo-users     # then open http://localhost:3001
+make web-dev                   # UI with hot reload on :5173
+node web/scripts/screenshots.mjs   # re-run the whole flow in a browser and refresh these images
+```
+
+**Slack** (`uv run agent slack`, Socket Mode, so nothing has to be reachable from the internet):
+posts new incidents to a channel, threads the diagnosis with Approve/Reject and feedback buttons,
+and answers questions asked in the thread. It acts as the Slack user who clicked, through the
+same API as the web UI, so only linked approvers can decide
+(`agent users add alice --role approver --slack U012ABC`). It needs a Slack app with a bot token
+(`SLACK_BOT_TOKEN`), an app-level token (`SLACK_APP_TOKEN`) and `SLACK_CHANNEL`; it is tested
+against a fake Slack client and the real API.
 
 ## Evaluation
 

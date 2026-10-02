@@ -5,6 +5,9 @@
     agent mcp                                # serve the tools over MCP (stdio)
     agent approvals [--status pending]       # list approval requests
     agent decide <request-id> approve|reject --by alice [--note ...]   # needs APPROVAL_DATABASE_URL
+    agent users add alice --role approver [--slack U012ABC]   # prompts for the password
+    agent users list
+    agent slack                                  # Slack bot (Socket Mode; SLACK_* env vars)
 
 Connection settings come from the environment (DATABASE_URL, KNOWLEDGE_URL, KNOWLEDGE_API_KEY,
 AGENT_PROVIDER, AGENT_MODEL, ...); see agent.runtime.Settings and agent.llm.
@@ -53,6 +56,12 @@ async def _investigate(rt: Runtime, args: argparse.Namespace) -> int:
 
 
 async def _main(args: argparse.Namespace) -> int:
+    if args.command == "slack":
+        from agent.slack_bot import run_socket_mode
+
+        logging.basicConfig(level=logging.INFO, stream=sys.stderr)
+        await run_socket_mode()
+        return 0
     if args.command == "mcp":
         from agent.mcp_server import serve_stdio
 
@@ -68,6 +77,8 @@ async def _main(args: argparse.Namespace) -> int:
         if args.command == "approvals":
             _print(await rt.approvals.list(args.status, args.limit))
             return 0
+        if args.command == "users":
+            return await _users(rt, args)
         if args.command == "decide":
             if rt.decider is None:
                 print("set APPROVAL_DATABASE_URL (approval_service role)", file=sys.stderr)
@@ -76,6 +87,32 @@ async def _main(args: argparse.Namespace) -> int:
                                            args.by, args.note))  # fmt: skip
             return 0
     return 2
+
+
+async def _users(rt: Runtime, args: argparse.Namespace) -> int:
+    import getpass
+    import os
+
+    from agent.people import PgPeople
+
+    people = PgPeople(rt.pool)
+    if args.users_command == "list":
+        rows = await rt.pool.fetch(
+            "SELECT username, display_name, role, slack_user_id, disabled, created_at "
+            "FROM users ORDER BY username"
+        )
+        _print([dict(r) for r in rows])
+        return 0
+    # Never on the command line (shell history, process list): prompt, or read from the env.
+    password = os.environ.get("AGENT_NEW_USER_PASSWORD") or getpass.getpass("Password: ")
+    if len(password) < 10:
+        print("password must be at least 10 characters", file=sys.stderr)
+        return 2
+    user = await people.add_user(
+        args.username, args.name or args.username, args.role, password, args.slack
+    )
+    _print({"username": user.username, "role": user.role, "slack_user_id": user.slack_user_id})
+    return 0
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -94,6 +131,15 @@ def build_parser() -> argparse.ArgumentParser:
     de.add_argument("decision", choices=["approve", "reject"])
     de.add_argument("--by", required=True, help="Who is deciding")
     de.add_argument("--note")
+    sub.add_parser("slack", help="Run the Slack bot (Socket Mode)")
+    us = sub.add_parser("users", help="Manage people who can use the web UI and Slack bot")
+    us_sub = us.add_subparsers(dest="users_command", required=True)
+    ua = us_sub.add_parser("add", help="Create or update an account (prompts for a password)")
+    ua.add_argument("username")
+    ua.add_argument("--role", choices=["viewer", "approver", "admin"], required=True)
+    ua.add_argument("--name", help="Display name")
+    ua.add_argument("--slack", help="Slack user id (U...) to link for the Slack bot")
+    us_sub.add_parser("list", help="List accounts")
     return p
 
 

@@ -20,7 +20,9 @@ SECRETS = (
     "AGENT_DB_PASSWORD",  # incident_agent role
     "APPROVAL_DB_PASSWORD",  # approval_service role (decides approval requests)
     "AGENT_API_KEY",  # clients of the agent API
-    "APPROVER_API_KEY",  # people approving drains/resets; never given to the agent
+    "SLACK_BOT_API_KEY",  # the Slack bot's key for the agent API (acts only for linked users)
+    "DEMO_APPROVER_PASSWORD",  # `make demo-users`: local accounts for trying the web UI
+    "DEMO_VIEWER_PASSWORD",
 )
 
 

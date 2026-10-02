@@ -29,6 +29,8 @@ _THINK = re.compile(r"<think>.*?</think>", re.DOTALL)
 # Where a tool call written as text can sit: Hermes-style tags, a ```json fence, or the bare text.
 _TAGGED = re.compile(r"<tool_call>\s*(.*?)\s*</tool_call>", re.DOTALL)
 _STRAY_TAG = re.compile(r"^\s*(?:<tool_call>)?\s*(.*?)\s*(?:</tool_call>)?\s*$", re.DOTALL)
+# `submit_answer` on its own line, then the arguments object (seen in A7 follow-ups).
+_NAMED = re.compile(r"^([A-Za-z_][A-Za-z0-9_]*)\s*\n\s*(\{.*\})$", re.DOTALL)
 _FENCED = re.compile(r"^```(?:json)?\s*(.*?)\s*```$", re.DOTALL)
 
 
@@ -44,7 +46,15 @@ def text_tool_calls(text: str, offered: set[str]) -> list[tuple[str, dict[str, A
         # The server may consume one tag of the pair, leaving e.g. `{...}\n</tool_call>`.
         text = _STRAY_TAG.match(text).group(1)  # type: ignore[union-attr]
         fenced = _FENCED.match(text)
-        blocks = [fenced.group(1) if fenced else text]
+        text = fenced.group(1) if fenced else text
+        named = _NAMED.match(text)
+        if named and named.group(1) in offered:
+            try:
+                args = json.loads(named.group(2))
+            except json.JSONDecodeError:
+                return []
+            return [(named.group(1), args)] if isinstance(args, dict) else []
+        blocks = [text]
     calls = []
     for block in blocks:
         try:
