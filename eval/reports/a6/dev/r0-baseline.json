@@ -7,7 +7,7 @@
     "provider": "openai_compat",
     "model": "qwen3-agent",
     "prompt_sha": "81e8c0d7431f",
-    "judge": "gemma3:12b",
+    "judge": "gemma3:12b (prompt v2)",
     "started_at": "2026-10-01T20:22:12+00:00",
     "finished_at": "2026-10-01T21:39:03+00:00",
     "composition": {
@@ -58,7 +58,7 @@
       "of": 25,
       "rate": 0.68
     },
-    "citation_support": 0.958,
+    "citation_support": 0.826,
     "latency_s_p50": 158.4,
     "latency_s_p95": 261.2,
     "tokens_per_case": 23540,
@@ -138,21 +138,21 @@
       "citation_verdicts": [
         {
           "chunk_id": "inc-2025031#report",
-          "supported": true,
-          "reason": "The passage describes rising PCIe replays preceding an XID 79, which aligns with the diagnosis's observation that rising PCIe replays often precede XID 79, even though no XID occurred in this case."
+          "supported": false,
+          "reason": "The passage describes a scenario where rising PCIe replays *preceded* an XID 79 and a faulty riser, contradicting the diagnosis's conclusion that the observed replays are likely a false positive and do not indicate an impending failure."
         },
         {
           "chunk_id": "inc-2025052#report",
-          "supported": true,
-          "reason": "The passage supports the diagnosis by noting that rising PCIe replays often precede XID 79, which aligns with the diagnosis's observation of rising PCIe replays without an XID."
+          "supported": false,
+          "reason": "The passage describes a scenario where rising PCIe replays *preceded* an XID 79 and a faulty riser, contradicting the diagnosis's conclusion that the observed replays are likely a false positive and require no action."
         },
         {
           "chunk_id": "inc-2025010#report",
           "supported": true,
-          "reason": "The passage supports the diagnosis by noting that rising PCIe replays often precede XID 79, which aligns with the diagnosis's observation of rising PCIe replays without an XID."
+          "reason": "The passage states that rising PCIe replays preceded an XID 79, which aligns with the diagnosis's observation that rising PCIe replays often precede XID 79, even though no XID occurred in this case."
         }
       ],
-      "citation_support": 1.0
+      "citation_support": 0.3333333333333333
     },
     {
       "case_id": "a6dev/f012-nvlink_degradation",
@@ -188,12 +188,12 @@
         {
           "chunk_id": "rb-005-nvlink-degradation#symptoms",
           "supported": true,
-          "reason": "The passage explicitly lists NVLink CRC errors, XID 74 errors, and performance degradation as symptoms of nvlink_degradation, which aligns with the diagnosis's summary."
+          "reason": "The passage lists NVLink CRC errors, XID 74 errors, and performance degradation as symptoms, all of which align with the diagnosis's summary of the observed issues."
         },
         {
           "chunk_id": "rb-005-nvlink-degradation#remediation",
           "supported": true,
-          "reason": "The passage explicitly recommends draining the node as a remediation for NVLink degradation, aligning with the diagnosis's recommended action."
+          "reason": "The passage explicitly recommends draining the node as a remediation for NVLink degradation, aligning with the diagnosis's recommended action and rationale."
         }
       ],
       "citation_support": 1.0
@@ -232,12 +232,12 @@
         {
           "chunk_id": "rb-015-power-capping-policy#when-nodes-get-capped",
           "supported": false,
-          "reason": "This passage describes power capping due to PSU redundancy loss or manual intervention, which is unrelated to the noisy_neighbor root cause described in the diagnosis."
+          "reason": "The passage describes scenarios for power capping (PSU redundancy loss or manual intervention) but doesn't relate to the observed workload behavior or noisy neighbor scenario described in the diagnosis."
         },
         {
           "chunk_id": "rb-015-power-capping-policy#rules",
           "supported": false,
-          "reason": "This passage discusses power capping policies and remediation steps, but it doesn't describe or explain noisy neighbor scenarios or why power limits might be enforced due to workload behavior."
+          "reason": "The passage describes procedures for managing power caps and troubleshooting power faults, but it doesn't provide facts that support the diagnosis's conclusion that the power reduction is due to a noisy neighbor."
         }
       ],
       "citation_support": 0.0
@@ -276,12 +276,12 @@
         {
           "chunk_id": "rb-004-gpu-off-bus#symptoms",
           "supported": true,
-          "reason": "The passage explicitly lists 'GPU fell off the bus (XID 79)' as a symptom and describes related observations like telemetry loss and PCIe fatal errors, directly supporting the diagnosis's root cause and summary."
+          "reason": "The passage explicitly states that a GPU falling off the bus (XID 79) results in the GPU disappearing from telemetry and causing job failures, which aligns with the diagnosis's summary of the GPU's state and the resulting job failures."
         },
         {
           "chunk_id": "rb-004-gpu-off-bus#likely-causes",
           "supported": true,
-          "reason": "The passage lists 'PCIe link failure' as a likely cause for a GPU falling off the bus (XID 79), which aligns with the diagnosis's root cause and the confirmation from the BMC log."
+          "reason": "The passage lists 'PCIe link failure' as a likely cause for a GPU falling off the bus (XID 79), which aligns with the diagnosis's conclusion of a hardware fault (PCIe link failure) confirmed by the BMC log."
         }
       ],
       "citation_support": 1.0
@@ -320,7 +320,7 @@
         {
           "chunk_id": "rb-004-gpu-off-bus#symptoms",
           "supported": true,
-          "reason": "The passage explicitly lists 'GPU fell off the bus (XID 79)' as a symptom and describes related telemetry behavior (GPU disappearing from telemetry), which aligns with the diagnosis's summary."
+          "reason": "The passage explicitly states that a GPU falling off the bus (XID 79) manifests as the GPU disappearing from telemetry, which aligns with the diagnosis's observation of GPU 6 stopping reporting."
         },
         {
           "chunk_id": "rb-004-gpu-off-bus#remediation",
@@ -364,15 +364,15 @@
         {
           "chunk_id": "rb-001-thermal-runaway#symptoms",
           "supported": true,
-          "reason": "The passage explicitly lists 'BMC SEL entry for a fan sensor crossing a critical low threshold, often with a reading of 0 RPM' and 'GPU temperatures...climb while power stays flat' and 'SM clocks fall 30-45%', all of which are directly observed in the diagnosis summary."
+          "reason": "The passage lists symptoms of thermal runaway, including BMC fan sensor failure (0 RPM), rising GPU temperatures with flat power, and throttling (SM clocks dropping 30-45%), all of which are observed in the diagnosis summary."
         },
         {
           "chunk_id": "rb-001-thermal-runaway#diagnosis",
-          "supported": true,
-          "reason": "The passage describes how to diagnose a fan failure (checking RPM, identifying affected GPUs, confirming throttling) which aligns with the diagnosis's root cause and summary of a failed fan and subsequent GPU throttling."
+          "supported": false,
+          "reason": "The passage describes how to check for a fan failure and confirm throttling, but it doesn't state facts that support the conclusion that the fan failure caused thermal runaway and GPU overheating; it only explains how to diagnose the situation."
         }
       ],
-      "citation_support": 1.0
+      "citation_support": 0.5
     },
     {
       "case_id": "a6dev/f017-ecc_degradation",
@@ -408,12 +408,12 @@
         {
           "chunk_id": "rb-002-ecc-degradation#symptoms",
           "supported": true,
-          "reason": "The passage explicitly describes the progression of ECC errors from correctable to uncorrectable, including the appearance of XID 48, which aligns with the diagnosis's root cause and summary."
+          "reason": "The passage explicitly states that ECC error degradation manifests as a rise in correctable errors and culminates in an uncorrectable error (DBE) with XID 48, which aligns with the diagnosis's summary and root cause."
         },
         {
           "chunk_id": "rb-002-ecc-degradation#escalation",
           "supported": true,
-          "reason": "The passage explicitly states that a DBE (uncorrectable error) warrants a sev1 escalation, which aligns with the diagnosis's recommendation to drain the node due to a DBE."
+          "reason": "The passage explicitly states that a DBE (uncorrectable error) warrants a sev1 escalation, which aligns with the diagnosis's recommended action to drain the node due to a DBE."
         }
       ],
       "citation_support": 1.0
@@ -451,16 +451,16 @@
       "citation_verdicts": [
         {
           "chunk_id": "rb-006-pcie-degradation#diagnosis",
-          "supported": true,
-          "reason": "The passage describes how to check the replay counter, which is the key symptom mentioned in the diagnosis, directly supporting the diagnosis's focus on PCIe replays."
+          "supported": false,
+          "reason": "The passage describes how to check and measure PCIe replays, but it doesn't provide facts that support the conclusion that steadily increasing replays without other errors indicate PCIe degradation requiring node draining."
         },
         {
           "chunk_id": "rb-006-pcie-degradation#remediation",
           "supported": true,
-          "reason": "The passage directly supports the recommended action of draining the node, stating that replays without errors warrant a drain and outlining subsequent remediation steps like reseating the GPU."
+          "reason": "The passage directly supports the recommended action of draining the node, stating that replays without errors should prompt a drain and outlining subsequent steps like reseating the GPU."
         }
       ],
-      "citation_support": 1.0
+      "citation_support": 0.5
     },
     {
       "case_id": "a6dev/f008-power_fault",
@@ -496,7 +496,7 @@
         {
           "chunk_id": "rb-015-power-capping-policy#when-nodes-get-capped",
           "supported": true,
-          "reason": "The passage explicitly states that power capping occurs automatically when PSU redundancy is lost, which aligns with the diagnosis's root cause of a power fault and the BMC triggering power capping."
+          "reason": "The passage explicitly states that power capping occurs automatically when PSU redundancy is lost, directly supporting the diagnosis's root cause of a power fault and the automatic power capping observed."
         },
         {
           "chunk_id": "rb-013-bmc-redfish-triage#interpreting-entries",
@@ -541,17 +541,17 @@
         {
           "chunk_id": "rb-007-noisy-neighbor-triage#when-to-use-this",
           "supported": true,
-          "reason": "The passage explicitly states that high utilization, power, and temperature without hardware errors are often due to workload changes like a noisy neighbor, which aligns with the diagnosis."
+          "reason": "The passage explicitly states that high utilization, power, and temperature without hardware errors are usually due to workload changes like a noisy neighbor, which aligns with the diagnosis's root cause and summary."
         },
         {
           "chunk_id": "rb-007-noisy-neighbor-triage#what-to-do",
           "supported": true,
-          "reason": "The passage explicitly states 'no hardware action' when a workload shift is confirmed, aligning with the recommended action of monitoring and the rationale that no hardware errors were detected."
+          "reason": "The passage explicitly states 'Workload shift confirmed: no hardware action' and 'Never drain a node just because utilization is high,' directly supporting the diagnosis's recommended action to monitor and rationale against draining the node."
         },
         {
           "chunk_id": "rb-022-detector-alerts-guide#model-alerts",
           "supported": true,
-          "reason": "The passage explicitly mentions 'workload shift' as a sign of a noisy neighbor, aligning with the diagnosis's root cause and summary."
+          "reason": "The passage explicitly links workload shift to a noisy neighbor, which aligns with the diagnosis's root cause and summary."
         }
       ],
       "citation_support": 1.0
@@ -590,15 +590,15 @@
         {
           "chunk_id": "rb-002-ecc-degradation#symptoms",
           "supported": true,
-          "reason": "The passage explicitly describes the progression of ECC errors from correctable (SBE) to uncorrectable (DBE) with XID 48, aligning with the diagnosis's root cause and summary."
+          "reason": "The passage describes symptoms of ECC degradation including rising correctable errors, retired pages, and DBE errors with XID 48, all of which align with the observations and root cause stated in the diagnosis."
         },
         {
           "chunk_id": "rb-002-ecc-degradation#diagnosis",
-          "supported": true,
-          "reason": "The passage provides specific commands to check ECC counters and emphasizes monitoring the rate of errors over time, aligning with the diagnosis's observation of an accelerating SBE rate and the need to prevent job crashes."
+          "supported": false,
+          "reason": "The passage only explains how to check and measure ECC errors, providing commands and procedures without stating facts that support the diagnosis's conclusions about the root cause or recommended action."
         }
       ],
-      "citation_support": 1.0
+      "citation_support": 0.5
     },
     {
       "case_id": "a6dev/f018-ecc_degradation",
@@ -635,17 +635,17 @@
         {
           "chunk_id": "rb-007-noisy-neighbor-triage#when-to-use-this",
           "supported": true,
-          "reason": "The passage describes a scenario with no hardware errors and high utilization, power, and temperature, attributing it to workload changes like a noisy neighbor, which aligns with the diagnosis's summary and root cause."
+          "reason": "The passage explicitly states that a sudden increase in utilization, power, and temperature without hardware errors is usually a workload change, which aligns with the diagnosis's summary and root cause."
         },
         {
           "chunk_id": "rb-007-noisy-neighbor-triage#what-to-do",
           "supported": true,
-          "reason": "The passage explicitly states that when a workload shift is confirmed, 'no hardware action' is required, directly supporting the diagnosis's recommendation of no action."
+          "reason": "The passage explicitly states 'Workload shift confirmed: no hardware action,' directly supporting the diagnosis's recommendation of no action and rationale."
         },
         {
           "chunk_id": "rb-022-detector-alerts-guide#model-alerts",
           "supported": true,
-          "reason": "The passage explicitly states that a `workload_shift` alert indicates a change in metrics explained by power draw, and links it to a noisy neighbor scenario, which aligns with the diagnosis."
+          "reason": "The passage explicitly links the `workload_shift` signal to a 'noisy neighbor' scenario, which aligns with the diagnosis's root cause."
         }
       ],
       "citation_support": 1.0
@@ -684,12 +684,12 @@
         {
           "chunk_id": "rb-006-pcie-degradation#symptoms",
           "supported": true,
-          "reason": "The passage states that a 'healthy links stay at or near zero' and the GPU's PCIe replay counter increases steadily (tens to hundreds per minute), which supports the diagnosis's observation of a rapidly increasing replay counter."
+          "reason": "The passage states that a 'healthy links stay at or near zero' and the GPU's PCIe replay counter 'increases steadily (tens to hundreds per minute)' which supports the diagnosis's observation of a rapidly increasing replay counter and its conclusion of PCIe degradation."
         },
         {
           "chunk_id": "rb-006-pcie-degradation#remediation",
           "supported": true,
-          "reason": "The passage directly supports the recommended action of draining the node, stating that replays without errors often precede a GPU falling off the bus and recommending a drain."
+          "reason": "The passage directly supports the recommended action by stating that 'Replays without errors are not urgent, but they often come before a GPU falls off the bus' and recommends scheduling a drain, which aligns with the diagnosis's rationale."
         }
       ],
       "citation_support": 1.0
@@ -728,12 +728,12 @@
         {
           "chunk_id": "rb-005-nvlink-degradation#symptoms",
           "supported": true,
-          "reason": "The passage explicitly lists NVLink CRC errors, XID 74 errors, and performance degradation as symptoms of NVLink degradation, directly supporting the diagnosis's summary and root cause."
+          "reason": "The passage explicitly lists sustained NVLink CRC errors, XID 74 errors, and performance degradation as symptoms of NVLink degradation, directly supporting the diagnosis's summary and root cause."
         },
         {
           "chunk_id": "rb-005-nvlink-degradation#remediation",
           "supported": true,
-          "reason": "The passage explicitly recommends draining the node as a remediation for NVLink degradation, aligning with the diagnosis's recommended action and rationale."
+          "reason": "The passage explicitly states that degraded NVLink links slow every job that uses them, directly supporting the diagnosis's rationale for draining the node to prevent job performance degradation."
         }
       ],
       "citation_support": 1.0
@@ -772,15 +772,15 @@
         {
           "chunk_id": "rb-002-ecc-degradation#escalation",
           "supported": true,
-          "reason": "The passage explicitly states that a DBE triggers sev1 escalation, which aligns with the diagnosis's rationale for draining the node."
+          "reason": "The passage explicitly states that a DBE triggers sev1 escalation, which directly supports the diagnosis's recommended action based on the DBE event."
         },
         {
           "chunk_id": "rb-002-ecc-degradation#diagnosis",
-          "supported": true,
-          "reason": "The passage describes how to diagnose ECC degradation by checking counters and looking at error rates, which aligns with the diagnosis's identification of accelerating ECC errors and the need to monitor trends."
+          "supported": false,
+          "reason": "The passage describes how to check ECC counters and interpret results, but does not state facts that support the diagnosis of ecc_degradation or the need for node draining."
         }
       ],
-      "citation_support": 1.0
+      "citation_support": 0.5
     },
     {
       "case_id": "a6dev/f009-thermal_runaway",
@@ -816,15 +816,15 @@
         {
           "chunk_id": "rb-001-thermal-runaway#symptoms",
           "supported": true,
-          "reason": "The passage describes a key symptom of thermal runaway - a GPU running hotter than predicted by power - which aligns with the diagnosis's observation of sustained thermal residuals (+13-14\u00b0C above predicted by power)."
+          "reason": "The passage lists sustained high GPU temperatures and thermal throttling as symptoms of thermal runaway, which aligns with the diagnosis's summary of GPU 5-7's behavior."
         },
         {
           "chunk_id": "rb-001-thermal-runaway#diagnosis",
-          "supported": true,
-          "reason": "The passage describes how to confirm thermal throttling using `nvidia-smi`, which aligns with the diagnosis's observation of thermal throttling on the affected GPUs."
+          "supported": false,
+          "reason": "The passage describes methods for checking and measuring fan speed, GPU temperature, and throttling, but does not provide facts that support the diagnosis's conclusion about degraded thermal interface material."
         }
       ],
-      "citation_support": 1.0
+      "citation_support": 0.5
     },
     {
       "case_id": "a6dev/f014-nvlink_degradation",
@@ -859,7 +859,7 @@
         {
           "chunk_id": "rb-007-noisy-neighbor-triage#when-to-use-this",
           "supported": true,
-          "reason": "The passage explicitly states that high utilization, power, and temperature without hardware errors typically indicate a workload change or noisy neighbor, aligning with the diagnosis's root cause and summary."
+          "reason": "The passage explicitly states that high utilization, power, and temperature without hardware errors typically indicate a workload change or noisy neighbor, which aligns with the diagnosis's summary and root cause."
         }
       ],
       "citation_support": 1.0
@@ -898,12 +898,12 @@
         {
           "chunk_id": "rb-004-gpu-off-bus#symptoms",
           "supported": true,
-          "reason": "The passage explicitly states that a GPU falling off the bus (XID 79) manifests as a disappearance from telemetry and an error message from `nvidia-smi`, which aligns with the diagnosis's summary."
+          "reason": "The passage confirms the key symptoms described in the diagnosis - GPU falling off the bus (XID 79) and telemetry showing no samples - directly supporting the root cause assessment."
         },
         {
           "chunk_id": "rb-004-gpu-off-bus#remediation",
           "supported": true,
-          "reason": "The passage explicitly states that draining the node is the remediation for a GPU falling off the bus (XID 79), which aligns directly with the diagnosis's recommended action."
+          "reason": "The passage directly supports the recommended action of draining the node, stating that the GPU cannot be recovered while the OS is running and requiring a reboot after drain, aligning with the diagnosis's rationale."
         }
       ],
       "citation_support": 1.0
@@ -942,12 +942,12 @@
         {
           "chunk_id": "rb-001-thermal-runaway#symptoms",
           "supported": true,
-          "reason": "The passage explicitly lists a BMC SEL entry for a fan sensor crossing a critical low threshold (0 RPM) as a symptom of thermal runaway, which aligns with the diagnosis's root cause and summary."
+          "reason": "The passage explicitly lists a BMC SEL entry for a fan sensor crossing a critical low threshold (0 RPM) and GPU temperatures exceeding predictions as symptoms of thermal runaway, directly supporting the diagnosis's summary and root cause."
         },
         {
           "chunk_id": "rb-001-thermal-runaway#likely-causes",
           "supported": true,
-          "reason": "The passage lists 'failed or failing chassis fan' as a likely cause of thermal runaway, directly supporting the diagnosis's root cause of a failed fan (FAN3 at 0 RPM)."
+          "reason": "The passage lists 'failed or failing chassis fan' as a likely cause of thermal runaway, which directly supports the diagnosis's root cause of a failed fan (FAN3 at 0 RPM)."
         }
       ],
       "citation_support": 1.0
@@ -985,7 +985,7 @@
         {
           "chunk_id": "rb-001-thermal-runaway#remediation",
           "supported": true,
-          "reason": "The passage explicitly recommends draining the node before replacing a failed fan, aligning with the diagnosis's recommended action and rationale."
+          "reason": "The passage explicitly recommends draining the node before replacing a failed fan to avoid job timeouts and GPU wear, directly supporting the recommended action in the diagnosis."
         }
       ],
       "citation_support": 1.0
@@ -1024,12 +1024,12 @@
         {
           "chunk_id": "rb-004-gpu-off-bus#symptoms",
           "supported": true,
-          "reason": "The passage explicitly lists 'GPU has fallen off the bus' as a symptom, aligning with the diagnosis's root cause and the observed telemetry of samples dropping to zero."
+          "reason": "The passage explicitly lists 'GPU disappears from telemetry: no samples' as a symptom of GPU off-bus (XID 79), which aligns with the diagnosis's observation of samples dropping to 0."
         },
         {
           "chunk_id": "rb-004-gpu-off-bus#remediation",
           "supported": true,
-          "reason": "The passage explicitly states that draining the node is the remediation step for a GPU off-bus (XID 79) and that the GPU cannot be recovered while the OS is running, directly supporting the diagnosis's recommended action and rationale."
+          "reason": "The passage explicitly states that a GPU off-bus (XID 79) requires node draining because the GPU cannot be recovered while the OS is running, directly supporting the recommended action and rationale in the diagnosis."
         }
       ],
       "citation_support": 1.0
@@ -1111,7 +1111,7 @@
         {
           "chunk_id": "rb-007-noisy-neighbor-triage#what-to-do",
           "supported": true,
-          "reason": "The passage explicitly states that when a workload shift is confirmed, no hardware action is needed, aligning with the diagnosis's recommendation of no action."
+          "reason": "The passage explicitly states 'Workload shift confirmed: no hardware action,' directly supporting the diagnosis's recommendation of no action and rationale."
         }
       ],
       "citation_support": 1.0
@@ -1150,12 +1150,12 @@
         {
           "chunk_id": "rb-007-noisy-neighbor-triage#when-to-use-this",
           "supported": true,
-          "reason": "The passage explicitly describes the scenario of high utilization, power, and temperature without hardware errors as a workload change, which aligns with the diagnosis's root cause of noisy neighbor."
+          "reason": "The passage explicitly states that high utilization, power, and temperature without hardware errors are usually due to workload changes, aligning with the diagnosis's conclusion of a noisy neighbor."
         },
         {
           "chunk_id": "rb-007-noisy-neighbor-triage#what-to-do",
           "supported": true,
-          "reason": "The passage explicitly states that when a workload shift is confirmed, no hardware action is needed, which aligns with the diagnosis's recommendation of no action."
+          "reason": "The passage explicitly states that when a workload shift is confirmed, 'no hardware action' is needed, directly supporting the recommended action of 'none'."
         }
       ],
       "citation_support": 1.0
