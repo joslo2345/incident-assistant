@@ -9,32 +9,100 @@
 ![Terraform: Azure AKS](https://img.shields.io/badge/terraform-Azure%20AKS-844FBA?logo=terraform&logoColor=white)
 ![Model cost: $0](https://img.shields.io/badge/model%20cost-%240%20per%20incident-2ea44f)
 
-**Incident Assistant** turns raw GPU-cluster telemetry into diagnosed incidents. It replays
-real fleet load, detects hardware anomalies (thermal, ECC, NVLink, PCIe, power, XID faults),
-and hands each incident to an investigation agent. The agent reads the metrics and logs, searches
-the runbooks, and returns a **cited root cause and a recommended fix**. Hardware actions such as a
-node drain are never executed automatically: they become approval requests that a person decides.
+**An AI assistant that helps data-center technicians find and fix broken GPUs faster, and that
+asks a person before it touches any hardware.**
 
-Everything runs on one laptop with an open-source model, from Docker Compose to a local
-Kubernetes cluster, at **$0 per incident**. The Azure path is written in Terraform and validated.
+## In 30 seconds
 
-| Detector | Retrieval | Agent root cause (held out) | Agent action allowed by runbook | Unsafe actions | Cluster from scratch |
-| :---: | :---: | :---: | :---: | :---: | :---: |
-| **99%** recall, **100%** precision | **100%** recall@5 | 19 → **22/25** | 15 → **23/25** | **0/3** | **1 min 45 s** |
+**The problem.** AI companies run thousands of GPUs (the chips that train and serve AI models).
+GPUs fail in many ways: they overheat, lose memory, or drop off the network. When one fails, an
+on-call engineer has to dig through charts, logs and repair manuals to work out what happened.
+That can take an hour, and a wrong call either wastes an expensive machine or leaves a broken one
+running.
+
+**What this project does.** It watches the fleet's sensor data, spots the faults automatically,
+and has an AI agent investigate each one the way an experienced engineer would. The agent comes
+back with *what broke, the evidence, the exact page of the repair manual it relied on, and the
+recommended fix*. Risky actions such as taking a server offline wait for a human to approve
+them.
+
+**Why it's credible.** Every claim is measured on test cases with known answers, including a
+held-out set the system was never tuned on. It runs end to end on one laptop with a free,
+open-source AI model, so it costs **$0 per incident**.
+
+| What was measured | Result | In plain words |
+| --- | :---: | --- |
+| Fault detection | **99%** caught, **100%** precise | Finds almost every injected fault and raises no false alarms |
+| Finding the right manual page | **100%** | The right repair instructions are always in the top 5 search results |
+| Agent's diagnosis, held-out test | 76% → **88%** correct | Improved over three measured rounds, then checked on unseen cases |
+| Agent's recommended fix | 60% → **92%** correct | The fix matches what the repair manual allows |
+| Unsafe actions | **0** | Never asked to take a healthy machine offline |
+| Setup on Kubernetes | **1 min 45 s** | From nothing to the whole system running |
 
 Every number comes from a reproducible run; details in [docs/RESULTS.md](docs/RESULTS.md).
 
+## One incident, start to finish
+
+1. **A GPU starts overheating.** Its temperature climbs, but its workload is normal.
+2. **The detector notices.** It predicts how hot that GPU *should* be for its
+   workload, sees it is far hotter, and opens an incident. A GPU that is hot only because it is
+   busy would not count.
+3. **The agent investigates.** It pulls the temperature and power history, reads the server's
+   hardware logs, and searches 22 repair manuals ("runbooks") and 64 past incidents.
+4. **It submits a diagnosis.** "Cooling fault on GPU 3 of node 7, high confidence," with the
+   readings as evidence and a link to the exact runbook section it followed.
+5. **It asks before acting.** Its recommendation, "drain the node" (move work off the server and
+   take it offline), becomes a request that only an approver can accept.
+6. **A technician decides** in the web app or in Slack. The decision is written to an append-only
+   audit log, and their thumbs up/down feeds the next round of testing.
+
+## What this project demonstrates
+
+| Area | What was built | Technologies |
+| --- | --- | --- |
+| **AI agents and evaluation** | Tool-using agent with cited answers and human approval; eval harness with a held-out set and an AI judge checked against hand grades | Qwen3 (open source, local), MCP, OpenAI-compatible API, Gemma 3 |
+| **Retrieval (RAG)** | Search over repair manuals and past incidents that combines meaning-based and keyword search | pgvector, Postgres full-text, cross-encoder reranker |
+| **Data engineering** | Streaming pipeline with no lost or duplicate records under crashes; real cluster workload replayed as sensor data | FastAPI, Redpanda (Kafka), TimescaleDB |
+| **Anomaly detection** | Rules, statistics and a physics-style thermal model, tuned on one dataset and verified on another | Python, SQL on TimescaleDB |
+| **Product** | Web app with roles, approvals, audit log and feedback; Slack bot | React, TypeScript, Tailwind, Slack Socket Mode |
+| **Platform and security** | Hardened Kubernetes chart, cloud infrastructure as code, keyless deploys, CI with security scans | Docker, Kubernetes, Helm, Terraform (Azure), GitHub Actions, Trivy |
+
+<details>
+<summary><b>Glossary</b>: terms used below</summary>
+
+| Term | Meaning |
+| --- | --- |
+| **GPU fleet** | All the GPU servers a company operates, here 64 GPUs on 8 servers ("nodes") |
+| **Telemetry** | The sensor readings each GPU reports: temperature, power, memory errors, and so on |
+| **DCGM / XID / BMC** | NVIDIA's GPU monitoring tool / NVIDIA's numbered GPU error codes / the server's built-in management chip and its hardware log |
+| **Incident** | A detected problem that needs a diagnosis |
+| **Runbook** | A repair manual: step-by-step instructions for one kind of failure |
+| **Agent** | An AI model that decides on its own which tools to call (query metrics, read logs, search runbooks) before answering |
+| **RAG** | Retrieval-augmented generation: the AI looks up documents first and answers from them, with citations |
+| **MCP** | Model Context Protocol, an open standard for exposing tools to AI agents |
+| **Drain** | Move workloads off a server and take it out of service for repair |
+| **Recall / precision** | Share of real faults caught / share of alarms that were real |
+| **Held-out set** | Test cases kept aside and never used for tuning, so the score shows real-world performance |
+| **Kubernetes, Helm, Terraform** | Run containers across machines / package an app for Kubernetes / describe cloud infrastructure as code |
+
+</details>
+
 ## Table of Contents
 
-1. [What is Incident Assistant?](#what-is-incident-assistant)
-2. [Catalogue](#catalogue)
-3. [Quick Start](#quick-start)
-4. [Components](#components)
+1. [What is Incident Assistant?](#what-is-incident-assistant) (architecture)
+2. [Catalogue](#catalogue) (screenshots)
+3. [Quick Start](#quick-start) (run it locally)
+4. [Components](#components) (each service in depth)
 5. [Evaluation](#evaluation)
 6. [Deployment](#deployment)
 7. [Documentation](#documentation)
 8. [Development](#development)
 9. [Acknowledgments](#acknowledgments)
+
+**Where to read:** recruiters and hiring managers are done after the sections above and the
+[Catalogue](#catalogue). Engineers can start at the architecture below, then
+[Evaluation](#evaluation) and [docs/DECISIONS.md](docs/DECISIONS.md) for the trade-offs behind
+each choice.
 
 ## What is Incident Assistant?
 
