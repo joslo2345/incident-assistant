@@ -1,7 +1,7 @@
 .DEFAULT_GOAL := help
 COMPOSE := docker compose -f deploy/compose.yaml
 
-.PHONY: help env install hooks lint typecheck test test-integration schemas schemas-check dashboards check up down logs model mcp demo-users web-dev eval eval-data eval-ci eval-ci-record eval-calibrate
+.PHONY: help env install hooks lint typecheck test test-integration schemas schemas-check dashboards check up down logs model mcp demo-users kind-up kind-install kind-down web-dev eval eval-data eval-ci eval-ci-record eval-calibrate
 
 help:  ## List targets
 	@grep -E '^[a-z-]+:.*## ' $(MAKEFILE_LIST) | awk -F':.*## ' '{printf "  %-14s %s\n", $$1, $$2}'
@@ -89,6 +89,35 @@ demo-users:  ## Create local accounts alice (approver) and victor (viewer); pass
 
 web-dev:  ## Run the web UI with hot reload on http://localhost:5173 (stack must be up)
 	cd web && npm install && npm run dev
+
+KIND := incident-assistant
+SERVICES := ingest consumer detector knowledge agent web
+
+CALICO_VERSION := v3.33.0
+CALICO_SHA256 := 2de8f47595fb9c41b3f47d7b767a1f8e72ecf84057af834738ff12689a234da5
+
+kind-up:  ## Local Kubernetes (kind + Calico, which enforces NetworkPolicy)
+	kind create cluster --config deploy/kind/cluster.yaml
+	@# Pinned and checksum-verified; the pod CIDR must match deploy/kind/cluster.yaml.
+	curl -fsSL https://raw.githubusercontent.com/projectcalico/calico/$(CALICO_VERSION)/manifests/calico.yaml \
+	  -o /tmp/calico-$(CALICO_VERSION).yaml
+	echo "$(CALICO_SHA256)  /tmp/calico-$(CALICO_VERSION).yaml" | shasum -a 256 -c -
+	sed -e 's|# - name: CALICO_IPV4POOL_CIDR|- name: CALICO_IPV4POOL_CIDR|' \
+	  -e 's|#   value: "192.168.0.0/16"|  value: "10.244.0.0/16"|' /tmp/calico-$(CALICO_VERSION).yaml \
+	  | kubectl apply -f - > /dev/null
+	kubectl -n kube-system rollout status ds/calico-node --timeout=300s
+
+kind-install: env  ## Build images, load them into kind, create the Secret, helm install
+	docker compose -f deploy/compose.yaml build $(SERVICES)
+	for s in $(SERVICES); do kind load docker-image incident-assistant/$$s:dev --name $(KIND); done
+	kubectl create namespace ia --dry-run=client -o yaml | kubectl apply -f -
+	kubectl -n ia create secret generic incident-assistant-secrets --from-env-file=deploy/.env \
+	  --dry-run=client -o yaml | kubectl apply -f -
+	helm upgrade --install ia deploy/helm/incident-assistant -n ia -f deploy/kind/values.yaml \
+	  --wait --wait-for-jobs --timeout 15m
+
+kind-down:  ## Delete the local Kubernetes cluster
+	kind delete cluster --name $(KIND)
 
 up: env  ## Build and start the local stack
 	$(COMPOSE) up -d --build --wait

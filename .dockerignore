@@ -7,3 +7,10 @@
 **/tests
 docs
 .env
+# Large or irrelevant for images
+data
+eval
+web/node_modules
+web/dist
+**/node_modules
+deploy/.env

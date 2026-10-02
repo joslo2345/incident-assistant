@@ -1,0 +1,6 @@
+Incident Assistant installed in namespace {{ .Release.Namespace }}.
+
+Watch it come up:   kubectl -n {{ .Release.Namespace }} get pods -w
+Web UI (no ingress): kubectl -n {{ .Release.Namespace }} port-forward svc/web 3001:80   -> http://localhost:3001
+Create a login:      kubectl -n {{ .Release.Namespace }} exec -it deploy/agent -- agent users add <name> --role approver
+Model endpoint:      {{ .Values.model.provider }} at {{ .Values.model.baseUrl }} ({{ .Values.model.name }})

@@ -18,3 +18,10 @@ dist/
 # Web UI
 /web/node_modules/
 /web/dist/
+
+# Terraform: provider cache, state and real variable files never go in Git
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
