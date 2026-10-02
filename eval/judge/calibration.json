@@ -1,0 +1,97 @@
+{
+  "v1": {
+    "all": {
+      "pairs": 41,
+      "incidents": 20,
+      "agreement": 0.829,
+      "cohen_kappa": 0.308,
+      "confusion": {
+        "both_supported": 32,
+        "both_unsupported": 2,
+        "judge_lenient": 7,
+        "judge_strict": 0
+      },
+      "hand_supported_rate": 0.78,
+      "judge_supported_rate": 0.951,
+      "missing_from_report": []
+    },
+    "tuning_incidents_1_10": {
+      "pairs": 22,
+      "incidents": 10,
+      "agreement": 0.818,
+      "cohen_kappa": 0.421,
+      "confusion": {
+        "both_supported": 16,
+        "both_unsupported": 2,
+        "judge_lenient": 4,
+        "judge_strict": 0
+      },
+      "hand_supported_rate": 0.727,
+      "judge_supported_rate": 0.909,
+      "missing_from_report": []
+    },
+    "held_out_incidents_11_20": {
+      "pairs": 19,
+      "incidents": 10,
+      "agreement": 0.842,
+      "cohen_kappa": 0.0,
+      "confusion": {
+        "both_supported": 16,
+        "both_unsupported": 0,
+        "judge_lenient": 3,
+        "judge_strict": 0
+      },
+      "hand_supported_rate": 0.842,
+      "judge_supported_rate": 1.0,
+      "missing_from_report": []
+    }
+  },
+  "v2": {
+    "all": {
+      "pairs": 41,
+      "incidents": 20,
+      "agreement": 0.902,
+      "cohen_kappa": 0.715,
+      "confusion": {
+        "both_supported": 30,
+        "both_unsupported": 7,
+        "judge_lenient": 2,
+        "judge_strict": 2
+      },
+      "hand_supported_rate": 0.78,
+      "judge_supported_rate": 0.78,
+      "missing_from_report": []
+    },
+    "tuning_incidents_1_10": {
+      "pairs": 22,
+      "incidents": 10,
+      "agreement": 0.909,
+      "cohen_kappa": 0.771,
+      "confusion": {
+        "both_supported": 15,
+        "both_unsupported": 5,
+        "judge_lenient": 1,
+        "judge_strict": 1
+      },
+      "hand_supported_rate": 0.727,
+      "judge_supported_rate": 0.727,
+      "missing_from_report": []
+    },
+    "held_out_incidents_11_20": {
+      "pairs": 19,
+      "incidents": 10,
+      "agreement": 0.895,
+      "cohen_kappa": 0.604,
+      "confusion": {
+        "both_supported": 15,
+        "both_unsupported": 2,
+        "judge_lenient": 1,
+        "judge_strict": 1
+      },
+      "hand_supported_rate": 0.842,
+      "judge_supported_rate": 0.842,
+      "missing_from_report": []
+    }
+  },
+  "note": "Hand grades by Claude as a stand-in for a human grader (user's choice), written blind to judge verdicts. v2 was written from v1's disagreements on incidents 1-10 only."
+}

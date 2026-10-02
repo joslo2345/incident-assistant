@@ -1,0 +1,4 @@
+# A6 round 4: the non-thinking (instruct) variant of the same model, same 32k context.
+# Build: ollama create qwen3-instruct-agent -f deploy/ollama/Modelfile.instruct
+FROM qwen3:30b-a3b-instruct-2507-q4_K_M
+PARAMETER num_ctx 32768

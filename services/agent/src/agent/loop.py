@@ -16,6 +16,7 @@ times out still leaves a complete trace up to that point.
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import logging
 import time
 import uuid
@@ -49,17 +50,34 @@ Be efficient: a typical investigation needs 4 to 7 tool calls. Ask for narrow ti
 
 Judgement:
 - Base the root cause on what you observed, and say what you observed in the summary.
-- A heavy job can make GPUs hot and power-hungry. Without hardware errors (XID, ECC, PCIe or \
-NVLink errors, BMC faults) or temperatures beyond the slowdown limit, that is noisy_neighbor, not \
-a fault.
-- Data can be missing: BMC logs are sometimes not collected, and a GPU that falls off the bus \
-stops reporting. Reason from what is present and lower your confidence when key data is absent.
+- Fault signals are not only log lines. Each of these points to failing hardware on its own, with \
+or without an XID or BMC entry:
+  - an enforced power limit (power_limit_w) below the GPU's default, 700 W on H100 and 400 W on \
+A100: the node is power-capped, usually after a PSU fault (power_fault);
+  - a GPU hotter than its power draw explains: a thermal_residual alert, or temperatures at the \
+slowdown limit with throttling while neighbouring GPUs stay cooler (thermal_runaway);
+  - rising ECC, PCIe replay or NVLink CRC counters (ecc_degradation, pcie_degradation, \
+nvlink_degradation).
+- noisy_neighbor means a workload change and nothing else: utilization, power and temperature \
+rise together, the power limit is at its default, no error counter rises, and there is no thermal \
+residual. If any fault signal above is present, it is not noisy_neighbor.
+- Data can be missing: BMC logs are often not collected, and a GPU that falls off the bus stops \
+reporting. A missing BMC entry is not evidence that the hardware is healthy; reason from the \
+telemetry that is present, and lower your confidence when key data is absent.
 - Use unknown when the evidence does not support a cause.
 - Citations must be chunk_ids that a tool returned in this investigation. Cite the runbook \
 section that supports your recommended action.
-- Recommend drain_node or reset_gpu only when the evidence shows the hardware is failing; both go \
-to a human for approval. Prefer monitor or none for workload behaviour.
+- Choose the action from the Remediation section of the runbook for your root cause (search for \
+it if you have not seen it), and cite that section. When the runbook says to drain, reset or \
+replace a part, recommend that: a real fault answered with monitor or none stays in service.
+- Use monitor or none only for noisy_neighbor, or when you are not confident the hardware is \
+faulty (and then say so and lower your confidence). drain_node and reset_gpu go to a human for \
+approval before anything happens.
 """
+
+
+# Identifies the prompt a run used, so eval reports can tell prompt versions apart.
+PROMPT_SHA = hashlib.sha256(SYSTEM_PROMPT.encode()).hexdigest()[:12]
 
 
 @dataclass(frozen=True)
@@ -123,12 +141,14 @@ class Investigator:
         traces: TraceStore,
         budget: Budget | None = None,
         tools: frozenset[str] | None = None,
+        labels: dict[str, Any] | None = None,
     ) -> None:
         self.provider = provider
         self.toolbox = toolbox
         self.approvals = approvals
         self.traces = traces
         self.budget = budget or Budget()
+        self.labels = labels or {}  # stored with each run, e.g. an eval round and case
         self.allowed = tools if tools is not None else frozenset(TOOLS)
         if unknown := self.allowed - set(TOOLS):
             raise ValueError(f"unknown tools in allowlist: {sorted(unknown)}")
@@ -140,7 +160,12 @@ class Investigator:
             provider=self.provider.name,
             model=self.provider.model,
             started_at=datetime.now(UTC),
-            config={"budget": asdict(self.budget), "tools": sorted(self.allowed)},
+            config={
+                "budget": asdict(self.budget),
+                "tools": sorted(self.allowed),
+                "prompt_sha": PROMPT_SHA,
+                **self.labels,
+            },
         )
         await self.traces.start(run)
         state = _RunState(run, incident, ToolContext(f"agent:{run.run_id}", incident.incident_id,

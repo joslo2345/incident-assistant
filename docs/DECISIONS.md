@@ -319,3 +319,54 @@ Running log of design choices: what was chosen, what was rejected, and why.
   `cost_usd` is 0 by construction and tokens and latency are the numbers to watch.
 - **Watcher investigates new live incidents** (sev1–3, once each), one at a time: a local model
   serves one request at a time anyway.
+
+## 2026-10-01 · A6 · Evaluation harness
+
+- **Sets built from injected faults, one case per fault.** Labels come from the injector's ground
+  truth plus a per-type policy read off the runbooks' remediation sections (`POLICY` in
+  `harness/src/evaluation/sets.py`): the runbook to cite and the actions it allows. Example: after
+  XID 79 only a drain is allowed, because the runbook says a GPU reset is not enough.
+- **Decoys added from decoy-only replays.** The detector correctly opens no incident for most
+  noisy-neighbor decoys, so a plain replay left the held-out set with none and the unsafe-action
+  rate unmeasurable. The decoys that *do* reach the agent (the hard ones) fill each set to 25.
+- **dev / held-out test, 25 each, new seeds** (51/61 dev, 53/63 test, 7 CI). Rounds are tuned on
+  dev only; test is scored at the start and the end. Smaller than the plan's 50-100 because the
+  local model takes ~2.5 min per incident; noise is measured by running the baseline twice.
+- **Missed actions are a first-class metric**, next to unsafe actions: a real fault answered with
+  "none" or "monitor" stays in service. The A5 baseline showed this is the agent's main failure.
+- **Fresh in-memory approvals per eval case.** With the real table, a drain filed in one round
+  appears in the next round's `get_node_inventory`, and the agent would see its own earlier
+  request.
+- **Judge: Gemma 3 12B**, a different family from the agent, scores only citation support.
+  Calibrated against blind hand grades (41 pairs, 20 incidents; graded by Claude as a stand-in,
+  by the user's choice). v1 was lenient (kappa 0.31; 7 of 9 disagreements "supported"). v2 was
+  written from the disagreements on incidents 1-10 only and measured on 11-20: kappa 0.00 to 0.60.
+  A rule suggested by a held-out case was deliberately left out of v2.
+- **CI replays recorded model replies** through the real stack. Timestamps in recorded tool
+  arguments are stored as offsets from the incident's first signal, because CI replays the data
+  relative to "now". The gate fails on a failed run, more tool errors, or lower scores than the
+  recording.
+- **Reports are tagged** with the commit, a dirty flag, the model, a hash of the system prompt and
+  the judge version, so every number in RESULTS.md can be traced to the code that produced it.
+- **Rounds chosen from traces, not guesses.** The baseline traces showed the model *seeing* a
+  power-limit cut or a thermal residual and dismissing it under the prompt's "no hardware errors"
+  rule, so rounds 2 and 3 changed exactly that guidance. Retrieval got no round, but the reports
+  show where it should go next: power faults are diagnosed correctly yet cite the power-capping
+  policy (rb-015) and BMC triage (rb-013) instead of the power-fault runbook (rb-003), in all 4 dev
+  and 2 test cases where the cause was right but the runbook was not cited (the 3rd test case is a
+  decoy citing the thermal runbook).
+- **Prompt guidance phrased generally, not as the eval's answer key.** Round 3 says "take the
+  action from the runbook's remediation", not "drain for thermal, replace for power", so the
+  held-out gains measure following runbooks, not memorizing labels.
+- **Round 4 rejected despite halving latency.** The instruct model needs twice the tool calls, so
+  it uses 2.3x the tokens: faster on a Mac (prefill is cheap), more expensive on any per-token API,
+  and worse on actions. Latency on this hardware is not the same as cost.
+- **The CI recording is made with the final agent**, after the rounds; the baseline recording was
+  skipped on purpose, because the gate compares a PR against the recorded agent.
+- **Replays made deterministic for the CI gate.** The first gate runs failed on an unchanged agent:
+  the replay started "now minus a day" to the second, so samples landed in different 1-minute
+  buckets; alerts within a minute were numbered in production order; and two replays of the same
+  nodes overlapped in time. Now replays start on a whole minute, alerts sort on every field, and
+  each gate run uses a fresh run id (recordings template the run prefix). Two replays of the same
+  seed give 24/24 identical incidents. The eval also waits for the 1-minute rollup to cover a
+  fresh replay, because get_metrics read it empty in the first minute.

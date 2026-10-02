@@ -49,6 +49,10 @@ SEVERITY_ORDER = [Severity.SEV1, Severity.SEV2, Severity.SEV3, Severity.SEV4]
 MAX_EVIDENCE_PER_KIND = 3
 
 
+def alert_order(a: Alert) -> tuple[object, ...]:
+    return (a.time, a.node_id, -1 if a.gpu_index is None else a.gpu_index, a.kind, a.signal)
+
+
 def classify(kinds: set[str]) -> FailureType:
     for failure_type, signals in CLASSIFICATION:
         if kinds & signals:
@@ -148,7 +152,9 @@ class IncidentTracker:
     def update(self, minute: datetime, alerts: list[Alert]) -> list[OpenIncident]:
         """Apply this minute's alerts; return incidents that changed (including resolved)."""
         changed: dict[uuid.UUID, OpenIncident] = {}
-        for a in sorted(alerts, key=lambda a: a.time):
+        # Ties broken on every field, so the same telemetry always yields the same evidence IDs
+        # (alerts within one minute used to come out in production order; the A6 CI eval found it).
+        for a in sorted(alerts, key=alert_order):
             inc = self._related(a)
             if inc is None:
                 if a.kind in NEVER_OPENS:

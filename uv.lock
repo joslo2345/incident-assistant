@@ -9,6 +9,7 @@ members = [
     "incident-consumer",
     "incident-contracts",
     "incident-detector",
+    "incident-eval",
     "incident-ingest",
     "incident-knowledge",
     "incident-replayer",
@@ -561,6 +562,7 @@ dependencies = [
     { name = "incident-consumer" },
     { name = "incident-contracts" },
     { name = "incident-detector" },
+    { name = "incident-eval" },
     { name = "incident-ingest" },
     { name = "incident-knowledge" },
     { name = "incident-replayer", extra = ["prepare"] },
@@ -582,6 +584,7 @@ requires-dist = [
     { name = "incident-consumer", editable = "services/consumer" },
     { name = "incident-contracts", editable = "libs/contracts" },
     { name = "incident-detector", editable = "services/detector" },
+    { name = "incident-eval", editable = "harness" },
     { name = "incident-ingest", editable = "services/ingest" },
     { name = "incident-knowledge", editable = "services/knowledge" },
     { name = "incident-replayer", extras = ["prepare"], editable = "replayer" },
@@ -642,6 +645,27 @@ requires-dist = [
     { name = "asyncpg", specifier = ">=0.31" },
     { name = "incident-contracts", editable = "libs/contracts" },
     { name = "prometheus-client", specifier = ">=0.26" },
+]
+
+[[package]]
+name = "incident-eval"
+version = "0.1.0"
+source = { editable = "harness" }
+dependencies = [
+    { name = "asyncpg" },
+    { name = "incident-agent" },
+    { name = "incident-contracts" },
+    { name = "incident-detector" },
+    { name = "openai" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "asyncpg", specifier = ">=0.31" },
+    { name = "incident-agent", editable = "services/agent" },
+    { name = "incident-contracts", editable = "libs/contracts" },
+    { name = "incident-detector", editable = "services/detector" },
+    { name = "openai", specifier = ">=3.22" },
 ]
 
 [[package]]
