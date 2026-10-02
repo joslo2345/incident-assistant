@@ -68,6 +68,35 @@ async def wait_for_rows(url: str, prefix: str, expected: int, timeout_s: float =
         await conn.close()
 
 
+async def wait_for_rollup(
+    url: str, prefix: str, start: datetime, end: datetime, timeout_s: float = 300
+) -> bool:
+    """Wait until the 1-minute rollup covers the replayed window. Backfilled data below the
+    rollup's watermark is invisible until the refresh policy (every minute) materializes it, and
+    the agent's get_metrics reads the rollup."""
+    conn = await asyncpg.connect(url)
+    pattern = prefix.replace("_", r"\_") + "%"
+    deadline = time.monotonic() + timeout_s
+    try:
+        while time.monotonic() < deadline:
+            row = await conn.fetchrow(
+                "SELECT min(bucket) AS first, max(bucket) AS last FROM gpu_metrics_1m "
+                "WHERE node_id LIKE $1 AND bucket >= $2 AND bucket < $3", pattern, start, end,
+            )  # fmt: skip
+            first, last = (row["first"], row["last"]) if row else (None, None)
+            if (
+                first is not None
+                and last is not None
+                and first <= start + timedelta(minutes=5)
+                and last >= end - timedelta(minutes=5)
+            ):
+                return True
+            await asyncio.sleep(5)
+        return False
+    finally:
+        await conn.close()
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--run-id", required=True)
@@ -89,7 +118,12 @@ def main() -> None:
         meta = json.loads(meta_path.read_text())
     else:
         seconds = duration_s(args.duration)
-        start = (datetime.now(UTC) - timedelta(seconds=seconds + 3600)).replace(microsecond=0)
+        # Start on a whole minute: the detector works in 1-minute buckets, so a replay that
+        # starts at a different second shifts samples between buckets and yields different
+        # alerts. Aligned, the same seed always gives the same incidents (the CI eval relies on it).
+        start = (datetime.now(UTC) - timedelta(seconds=seconds + 3600)).replace(
+            second=0, microsecond=0
+        )
         cmd = [
             "uv", "run", "replay", "--speed", "0", "--duration", str(seconds),
             "--start", start.isoformat(), "--run-id", args.run_id, "--faults", str(args.faults),
@@ -105,6 +139,8 @@ def main() -> None:
         rows = asyncio.run(wait_for_rows(url, prefix, int(stats["accepted"])))
         if rows < stats["accepted"]:
             raise SystemExit(f"only {rows}/{stats['accepted']} rows arrived; is the consumer up?")
+        if not asyncio.run(wait_for_rollup(url, prefix, start, start + timedelta(seconds=seconds))):
+            raise SystemExit("the 1-minute rollup did not cover the replayed window in time")
         meta = {
             "run_id": args.run_id, "start": start.isoformat(),
             "end": (start + timedelta(seconds=seconds)).isoformat(), "duration_s": seconds,

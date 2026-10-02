@@ -10,3 +10,7 @@ dist/
 
 # Evaluation runs (ground truth, reports) are reproducible from seeds
 /eval/runs/
+
+# Built per CI eval run (fresh run id each time)
+/eval/sets/ci-replay.*
+/eval/reports/a6/ci-replay/

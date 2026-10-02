@@ -5,9 +5,11 @@ validation and scoring all run for real against a freshly replayed stack; only t
 turns come from the file. A change that breaks a tool, the loop or the checks shows up as a
 failed run, more tool errors, or lower scores than the recording had.
 
-The CI data is replayed relative to "now", so timestamps and incident IDs in tool arguments
-differ between recording and replay. Recorded turns store timestamps as offsets from the
-incident's first signal (`{{t+600}}`) and the incident ID as `{{incident_id}}`.
+The CI data is replayed relative to "now", and under a fresh run id each time (two replays of the
+same nodes over overlapping hours would mix in the database). So timestamps, incident IDs and
+node names in tool arguments all differ between recording and replay. Recorded turns store
+timestamps as offsets from the incident's first signal (`{{t+600}}`), the incident ID as
+`{{incident_id}}`, and the run prefix of node names as `{{run}}`; cases are keyed by fault id.
 """
 
 from __future__ import annotations
@@ -41,7 +43,16 @@ def anchor(incident: Incident) -> datetime:
     return min(e.window_start for e in incident.evidence)
 
 
-def _template(text: str, incident: Incident) -> str:
+def fault_key(case_id: str) -> str:
+    """'a6ci/f003-nvlink_degradation' -> 'f003-nvlink_degradation' (stable across run ids)."""
+    return case_id.split("/", 1)[-1]
+
+
+def run_of(case_id: str) -> str:
+    return case_id.split("/", 1)[0]
+
+
+def _template(text: str, incident: Incident, run: str) -> str:
     base = anchor(incident)
 
     def offset(m: re.Match[str]) -> str:
@@ -49,20 +60,22 @@ def _template(text: str, incident: Incident) -> str:
         t = t if t.tzinfo else t.replace(tzinfo=UTC)
         return f"{{{{t{int((t - base).total_seconds()):+d}}}}}"
 
-    return _ISO.sub(offset, text).replace(str(incident.incident_id), "{{incident_id}}")
+    text = _ISO.sub(offset, text).replace(str(incident.incident_id), "{{incident_id}}")
+    return text.replace(f"{run}-", "{{run}}-")
 
 
-def _render(text: str, incident: Incident) -> str:
+def _render(text: str, incident: Incident, run: str) -> str:
     base = anchor(incident)
 
     def iso(m: re.Match[str]) -> str:
         t = base + timedelta(seconds=int(m.group(1)))
         return t.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
-    return _OFFSET.sub(iso, text).replace("{{incident_id}}", str(incident.incident_id))
+    text = _OFFSET.sub(iso, text).replace("{{incident_id}}", str(incident.incident_id))
+    return text.replace("{{run}}-", f"{run}-")
 
 
-def turn_to_json(turn: Turn, incident: Incident) -> dict[str, Any]:
+def turn_to_json(turn: Turn, incident: Incident, run: str) -> dict[str, Any]:
     raw = {
         "text": turn.text,
         "tool_calls": [asdict(c) for c in turn.tool_calls],
@@ -70,11 +83,11 @@ def turn_to_json(turn: Turn, incident: Incident) -> dict[str, Any]:
         "stop_reason": turn.stop_reason,
         "model": turn.model,
     }
-    return json.loads(_template(json.dumps(raw), incident))  # type: ignore[no-any-return]
+    return json.loads(_template(json.dumps(raw), incident, run))  # type: ignore[no-any-return]
 
 
-def turn_from_json(data: dict[str, Any], incident: Incident) -> Turn:
-    d = json.loads(_render(json.dumps(data), incident))
+def turn_from_json(data: dict[str, Any], incident: Incident, run: str) -> Turn:
+    d = json.loads(_render(json.dumps(data), incident, run))
     return Turn(
         text=d["text"],
         tool_calls=[ToolCall(**c) for c in d["tool_calls"]],
@@ -108,11 +121,12 @@ class RecordingProvider:
         self.cassette = cassette
         self.name, self.model, self.price = inner.name, inner.model, inner.price
         self.case_id = ""
+        self.run = ""
         self.incident: Incident | None = None
 
     def begin(self, case_id: str, incident: Incident) -> None:
-        self.case_id, self.incident = case_id, incident
-        self.cassette.cases[case_id] = []
+        self.case_id, self.incident, self.run = fault_key(case_id), incident, run_of(case_id)
+        self.cassette.cases[self.case_id] = []
 
     def start(self, system: str, user: str) -> ChatSession:
         return _RecordingSession(self, self.inner.start(system, user))
@@ -125,7 +139,9 @@ class _RecordingSession:
     async def next(self, tools: Sequence[ToolSpec]) -> Turn:
         turn = await self.inner.next(tools)
         assert self.p.incident is not None
-        self.p.cassette.cases[self.p.case_id].append(turn_to_json(turn, self.p.incident))
+        self.p.cassette.cases[self.p.case_id].append(
+            turn_to_json(turn, self.p.incident, self.p.run)
+        )
         return turn
 
     def add_tool_results(self, results: Sequence[ToolResult]) -> None:
@@ -146,11 +162,14 @@ class ReplayProvider:
         self.price = Price()
         self.turns: list[dict[str, Any]] = []
         self.incident: Incident | None = None
+        self.run = ""
 
     def begin(self, case_id: str, incident: Incident) -> None:
-        if case_id not in self.cassette.cases:
-            raise ProviderError(f"no recording for case {case_id}")
-        self.turns, self.incident = list(self.cassette.cases[case_id]), incident
+        key = fault_key(case_id)
+        if key not in self.cassette.cases:
+            raise ProviderError(f"no recording for case {key}")
+        self.turns, self.incident = list(self.cassette.cases[key]), incident
+        self.run = run_of(case_id)
 
     def start(self, system: str, user: str) -> ChatSession:
         return _ReplaySession(self)
@@ -164,7 +183,7 @@ class _ReplaySession:
         if not self.p.turns:
             raise ProviderError("recording exhausted: the loop asked for more turns than recorded")
         assert self.p.incident is not None
-        return turn_from_json(self.p.turns.pop(0), self.p.incident)
+        return turn_from_json(self.p.turns.pop(0), self.p.incident, self.p.run)
 
     def add_tool_results(self, results: Sequence[ToolResult]) -> None:
         pass

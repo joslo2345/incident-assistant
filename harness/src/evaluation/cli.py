@@ -2,8 +2,8 @@
 
 evaluate build --name dev --run-id a6dev     # label the incidents of a replayed run
 evaluate run --set dev --label baseline --judge
-evaluate run --set ci --record eval/cassettes/ci.json      # record model replies
-evaluate run --set ci --replay eval/cassettes/ci.json --gate eval/cassettes/ci.expected.json
+make eval-ci-record     # record the model's replies on a fresh replay of the CI faults
+make eval-ci            # replay them through the stack under a fresh run id, gated
 evaluate calibrate eval/reports/a6/dev/baseline.json       # judge vs hand grades
 evaluate compare eval/reports/a6/dev/baseline.json eval/reports/a6/dev/round-1.json
 """

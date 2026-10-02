@@ -348,3 +348,25 @@ Running log of design choices: what was chosen, what was rejected, and why.
   recording.
 - **Reports are tagged** with the commit, a dirty flag, the model, a hash of the system prompt and
   the judge version, so every number in RESULTS.md can be traced to the code that produced it.
+- **Rounds chosen from traces, not guesses.** The baseline traces showed the model *seeing* a
+  power-limit cut or a thermal residual and dismissing it under the prompt's "no hardware errors"
+  rule, so rounds 2 and 3 changed exactly that guidance. Retrieval got no round, but the reports
+  show where it should go next: power faults are diagnosed correctly yet cite the power-capping
+  policy (rb-015) and BMC triage (rb-013) instead of the power-fault runbook (rb-003), in all 4 dev
+  and 2 test cases where the cause was right but the runbook was not cited (the 3rd test case is a
+  decoy citing the thermal runbook).
+- **Prompt guidance phrased generally, not as the eval's answer key.** Round 3 says "take the
+  action from the runbook's remediation", not "drain for thermal, replace for power", so the
+  held-out gains measure following runbooks, not memorizing labels.
+- **Round 4 rejected despite halving latency.** The instruct model needs twice the tool calls, so
+  it uses 2.3x the tokens: faster on a Mac (prefill is cheap), more expensive on any per-token API,
+  and worse on actions. Latency on this hardware is not the same as cost.
+- **The CI recording is made with the final agent**, after the rounds; the baseline recording was
+  skipped on purpose, because the gate compares a PR against the recorded agent.
+- **Replays made deterministic for the CI gate.** The first gate runs failed on an unchanged agent:
+  the replay started "now minus a day" to the second, so samples landed in different 1-minute
+  buckets; alerts within a minute were numbered in production order; and two replays of the same
+  nodes overlapped in time. Now replays start on a whole minute, alerts sort on every field, and
+  each gate run uses a fresh run id (recordings template the run prefix). Two replays of the same
+  seed give 24/24 identical incidents. The eval also waits for the 1-minute rollup to cover a
+  fresh replay, because get_metrics read it empty in the first minute.

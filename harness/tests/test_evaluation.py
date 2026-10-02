@@ -156,22 +156,25 @@ async def test_recording_replays_against_shifted_data() -> None:
     rec = RecordingProvider(ScriptedProvider(list(turns)), cassette)
     rec.begin("a6ci/f1", recorded_incident)
     await rec.start("sys", "user").next([])
-    stored = json.dumps(cassette.cases["a6ci/f1"])
+    stored = json.dumps(cassette.cases["f1"])  # keyed by fault, not run
     assert "{{t-1800}}" in stored and "{{t+900}}" in stored and "{{incident_id}}" in stored
+    assert "{{run}}-h100-node-01" in stored
 
     # CI replays the same faults a day later: new times, new incident id.
     later = incident(T0 + timedelta(days=1))
+    # ...under a fresh run id, so node names differ too.
     replay = ReplayProvider(cassette)
-    replay.begin("a6ci/f1", later)
+    replay.begin("ci123456/f1", later)
     turn = await replay.start("sys", "user").next([])
     args = turn.tool_calls[0].arguments
     assert args is not None and args["start"] == "2026-10-01T01:30:00Z"
+    assert args["node_id"] == "ci123456-h100-node-01"
     assert turn.tool_calls[1].arguments == {"incident_id": str(later.incident_id)}
     assert anchor(later) - anchor(recorded_incident) == timedelta(days=1)
     with pytest.raises(ProviderError, match="exhausted"):
         await replay.start("s", "u").next([])
     with pytest.raises(ProviderError, match="no recording"):
-        replay.begin("a6ci/unknown", later)
+        replay.begin("ci123456/unknown", later)
 
 
 def test_kappa_and_calibration(tmp_path: Path) -> None:

@@ -1,0 +1,8 @@
+{
+  "cases": 10,
+  "succeeded": 10,
+  "tool_errors": 7,
+  "root_cause_accuracy": 10,
+  "action_correct": 9,
+  "runbook_cited": 8
+}
