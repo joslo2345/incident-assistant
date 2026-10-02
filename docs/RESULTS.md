@@ -120,3 +120,62 @@ baseline.
 **Run-to-run variance:** the same incident (`ev3-h100-node-05` thermal) was diagnosed correctly in
 one batch and as `noisy_neighbor` in the next, at temperature 0.2. Single runs are noisy; A6 should
 repeat each incident and report spread.
+
+## A6 · Evaluation harness and improvement rounds
+
+`make eval` scores the agent on a labelled set in one command (reports in
+[eval/reports/a6/](../eval/reports/a6/), each tagged with commit, model, prompt hash and judge).
+Sets: `dev` 25 and held-out `test` 25 incidents (all 7 types, 3 decoys each, about half with BMC
+logs missing), plus a 10-incident `ci` set. Local model Qwen3 30B-A3B on an Apple M3 Pro; judge
+Gemma 3 12B. Cost is $0 throughout.
+
+**Held-out test set, before and after** (scored only twice):
+
+| Metric | Baseline | Final (round 3) |
+| --- | --- | --- |
+| Runs with a valid diagnosis | 25/25 | 25/25 |
+| **Root-cause accuracy** | 19/25 (76%) | **22/25 (88%)** |
+| Root cause, BMC logs missing | 9/14 | 12/14 |
+| **Action allowed by the runbook** | 15/25 (60%) | **23/25 (92%)** |
+| **Missed actions** (real fault left in service) | 8/22 | **1/22** |
+| Unsafe actions (hardware action on a decoy) | 0/3 | 0/3 |
+| Cites the runbook for the true type | 16/25 | 19/25 |
+| Citation support (judge v2) | 89% | 88% |
+| Latency p50 | 145 s | 125 s |
+| Tokens per incident | 24.0k | 27.5k |
+| Cost per incident | $0 | $0 |
+
+Thermal runaway, the worst type at baseline, went from 1/4 to 4/4 on the held-out set.
+
+**Improvement log (dev set, one change per round):**
+
+| Round | Change | Root cause | Action allowed | Missed actions | Unsafe | Latency p50 | Verdict |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| r0 | Baseline (A5 as merged), run twice | 19, 18 | 15, 18 | 9, 7 | 0, 0 | 158 s, 178 s | 5 of 25 cases flip between identical runs: a change must move a metric by more than ~3 to count |
+| r1 | Never send null assistant content (a run crashed when reasoning used the whole token budget) | 17 | 17 | 7 | 0 | 163 s | Kept: the crash case recurred and the run survived; no quality effect, as expected |
+| r2 | Prompt: power-limit drops, thermal residuals and rising error counters are faults on their own; missing BMC logs aren't evidence of health | **22** | 19 | 5 | 0 | 143 s | Kept: BMC-missing faults 8-9/13 to 13/13; power faults 2/4 to 4/4; no decoy got a hardware action |
+| r3 | Prompt: take the action from the runbook's remediation; monitor/none only for workload or genuine doubt | 22 | **24** | **1** | 0 | 124 s | Kept: missed actions 5 to 1 with no unsafe actions |
+| r4 | "Cheaper model": the instruct (non-thinking) Qwen3 30B-A3B | 21 | 18 | 5 | 0 | **61 s** | Rejected: twice as fast, but 2 runs ended without a diagnosis, actions regressed, and tokens went up 2.3x (twice the tool calls, each resending the context), so it would cost *more* on a per-token API |
+
+All rounds: 0/3 unsafe actions. Citation support moved between 83% and 97% with no pattern (it
+moved 13 points between the two identical baseline runs), so it isn't used to pick rounds.
+
+**Next round, not run:** every real fault with the right root cause but not the right runbook is a power
+fault citing rb-015/rb-013 instead of rb-003, a retrieval ranking issue for a retrieval round.
+
+**Judge calibration** ([eval/judge/calibration.json](../eval/judge/calibration.json)): 41
+(diagnosis, cited passage) pairs from 20 dev incidents, hand-graded blind to the judge. The hand
+grades were made by Claude as a stand-in for a human grader (the user's choice), so they measure
+agreement with a careful second grader, not with an operator.
+
+| Judge prompt | Agreement | Cohen's kappa | Errors |
+| --- | --- | --- | --- |
+| v1, all 41 pairs | 83% | 0.31 | 7 lenient, 0 strict |
+| v1, held-out incidents 11-20 | 84% | **0.00** | lenient only |
+| v2, held-out incidents 11-20 (written from 1-10 only) | 90% | **0.60** | 1 lenient, 1 strict |
+
+v1 called almost everything "supported", including how-to sections and passages pointing to the
+opposite conclusion; its 96% citation support on the baseline was really ~78% by hand grades.
+
+**CI:** the 10-incident set replays recorded model replies through the real stack on every PR
+(`make eval-ci`); it fails on a failed run, more tool errors, or scores below the recording.

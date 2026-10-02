@@ -151,7 +151,10 @@ class OpenAICompatSession:
         self.messages.append(
             {
                 "role": "assistant",
-                "content": text or None,
+                # Never null: a turn that used its whole budget on reasoning has no text and no
+                # tool calls, and Ollama rejects a null-content assistant message on the next
+                # request (found by the A6 baseline).
+                "content": text,
                 **(
                     {
                         "tool_calls": [

@@ -256,6 +256,41 @@ class PgApprovals:
         )
 
 
+class MemoryApprovals:
+    """Approval requests kept in memory: for evaluation runs, so one run's requests can't leak
+    into the next run's view of a node (get_node_inventory shows pending requests)."""
+
+    def __init__(self) -> None:
+        self.rows: list[dict[str, Any]] = []
+
+    async def request(
+        self,
+        action: ApprovalAction,
+        node_id: str,
+        gpu_index: int | None,
+        reason: str,
+        requested_by: str,
+        incident_id: uuid.UUID | None = None,
+        run_id: uuid.UUID | None = None,
+    ) -> tuple[dict[str, Any], bool]:
+        for r in self.rows:
+            if (r["action"], r["node_id"], r["gpu_index"]) == (action, node_id, gpu_index):
+                return r, False
+        row = {
+            "request_id": uuid.uuid4(), "action": action, "node_id": node_id,
+            "gpu_index": gpu_index, "reason": reason[:2000], "incident_id": incident_id,
+            "run_id": run_id, "requested_by": requested_by, "status": "pending",
+        }  # fmt: skip
+        self.rows.append(row)
+        return row, True
+
+    async def for_node(self, node_id: str, limit: int) -> list[dict[str, Any]]:
+        return [r for r in self.rows if r["node_id"] == node_id][:limit]
+
+    async def list(self, status: str | None, limit: int) -> list[dict[str, Any]]:
+        return [r for r in self.rows if status is None or r["status"] == status][:limit]
+
+
 class DecisionError(Exception):
     pass
 
