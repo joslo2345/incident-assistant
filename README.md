@@ -352,6 +352,21 @@ make kind-down
 
 Full guide: **[docs/INSTALL.md](docs/INSTALL.md)**.
 
+### Self-hosted model (Project B)
+
+The model is a setting, not code: any OpenAI-compatible endpoint or the Anthropic API. The
+companion repo **[self-hosted-model](https://github.com/joslo2345/self-hosted-model)** serves an
+open model (Qwen3.5-9B) on vLLM in the same cluster and measured it on this project's evals:
+root cause 23/25 and 97% supported citations on the held-out set, at $0 per call but a GPU's
+fixed daily cost. Its recommendation: the hosted API below ~170 incidents/day, self-hosted above
+that or when incident data must stay in your tenant. To switch, add one values file; the hosted
+API takes over automatically if the self-hosted model fails mid-investigation:
+
+```sh
+helm upgrade --install ia deploy/helm/incident-assistant -n ia \
+  -f deploy/helm/values-azure.yaml -f deploy/helm/values-selfhosted.yaml
+```
+
 ## Documentation
 
 - [Problem statement](docs/PROBLEM.md): who it's for and how success is measured
