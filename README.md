@@ -38,8 +38,10 @@ open-source AI model, so it costs **$0 per incident**.
 | Agent's recommended fix | 60% → **92%** correct | The fix matches what the repair manual allows |
 | Unsafe actions | **0** | Never asked to take a healthy machine offline |
 | Setup on Kubernetes | **1 min 45 s** | From nothing to the whole system running |
+| Same eval on a self-hosted 9B model | **92%** correct | Accurate enough, but a hosted model stays cheaper below ~170 incidents a day |
 
-Every number comes from a reproducible run; details in [docs/RESULTS.md](docs/RESULTS.md).
+Every number comes from a reproducible run; details in [docs/RESULTS.md](docs/RESULTS.md). The
+whole story, as a customer engagement: **[case study](docs/CASE_STUDY.md)**.
 
 ## One incident, start to finish
 
@@ -369,6 +371,7 @@ helm upgrade --install ia deploy/helm/incident-assistant -n ia \
 
 ## Documentation
 
+- [Case study](docs/CASE_STUDY.md): the problem, approach, results and trade-offs in one read
 - [Problem statement](docs/PROBLEM.md): who it's for and how success is measured
 - [Architecture](docs/ARCHITECTURE.md): components, data flow, contracts
 - [Decisions](docs/DECISIONS.md): what was chosen, what was rejected, and why
