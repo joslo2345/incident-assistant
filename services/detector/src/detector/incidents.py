@@ -172,7 +172,9 @@ class IncidentTracker:
                 self.open.setdefault(a.node_id, []).append(inc)
             inc.alerts.append(a)
             inc.last_signal_at = max(inc.last_signal_at, a.time)
-            inc.updated_at = minute
+            # An alert can carry a time inside the minute (a BMC entry at 01:43:26 while minute
+            # 01:43:00 is processed); updated_at must not fall before the incident's created_at.
+            inc.updated_at = max(minute, a.time)
             if inc.opened_at is None and a.severity != Severity.SEV4:
                 inc.opened_at = a.time
             changed[inc.incident_id] = inc
