@@ -1,0 +1,20 @@
+# Project B (self-hosted-model): run the agent on the self-hosted model in the same cluster, with
+# Claude as fallback. Layer on top of the environment's values:
+#   helm upgrade --install ia deploy/helm/incident-assistant -n ia \
+#     -f deploy/helm/values-azure.yaml -f deploy/helm/values-selfhosted.yaml
+# Needs Project B's vLLM chart in namespace selfhost; its NetworkPolicy admits only this agent pod.
+# Config only: no code or image change. Remove this file from the command to switch back.
+model:
+  provider: openai_compat
+  baseUrl: http://vllm.selfhost.svc:8000/v1
+  name: qwen3.5-9b                 # the vLLM chart's servedName
+  fallback:
+    provider: anthropic            # the hosted API when vLLM is down or slow
+    name: claude-opus-5-5
+    afterSeconds: 120
+    cooldownSeconds: 60
+
+secrets:
+  externalSecrets:
+    # vLLM's key (same value as the vLLM chart's vllm-api-key Secret) and the hosted API's key.
+    extraKeys: [AGENT_LLM_API_KEY, ANTHROPIC_API_KEY]

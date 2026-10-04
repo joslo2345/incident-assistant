@@ -150,6 +150,9 @@ class _RecordingSession:
     def add_user(self, text: str) -> None:
         self.inner.add_user(text)
 
+    def add_assistant(self, turn: Turn) -> None:
+        self.inner.add_assistant(turn)
+
 
 class ReplayProvider:
     """Serves recorded turns in order; runs out (and fails the run) if the loop asks for more."""
@@ -189,4 +192,7 @@ class _ReplaySession:
         pass
 
     def add_user(self, text: str) -> None:
+        pass
+
+    def add_assistant(self, turn: Turn) -> None:
         pass

@@ -6,8 +6,9 @@ thinking blocks stay valid across tool calls.
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Sequence
-from typing import Literal
+from typing import Any, Literal
 
 import anthropic
 from anthropic.types.beta import BetaMessageParam, BetaTextBlockParam, BetaToolParam
@@ -28,6 +29,13 @@ DEFAULT_MODEL = "claude-opus-5-5"
 # USD per million tokens (input, output, cache read, cache write at 1.25x input).
 PRICES = {"claude-opus-5-5": Price(4.0, 20.0, 0.20, 5.0)}
 Effort = Literal["low", "medium", "high", "xhigh", "max"]
+_ID_CHARS = re.compile(r"[^a-zA-Z0-9_-]")
+
+
+def _tool_id(call_id: str) -> str:
+    """Claude accepts tool-use ids of letters, digits, _ and - only; ids from another provider
+    (a fallback taking over a conversation) are mapped the same way in calls and results."""
+    return _ID_CHARS.sub("_", call_id)
 
 
 class ClaudeProvider:
@@ -115,7 +123,7 @@ class ClaudeSession:
                 "content": [
                     {
                         "type": "tool_result",
-                        "tool_use_id": r.call_id,
+                        "tool_use_id": _tool_id(r.call_id),
                         "content": r.content,
                         "is_error": r.is_error,
                     }
@@ -126,3 +134,14 @@ class ClaudeSession:
 
     def add_user(self, text: str) -> None:
         self.messages.append({"role": "user", "content": text})
+
+    def add_assistant(self, turn: Turn) -> None:
+        # A turn from another model: its text and tool calls, without thinking blocks.
+        content: list[Any] = [{"type": "text", "text": turn.text}] if turn.text else []
+        content += [
+            {"type": "tool_use", "id": _tool_id(c.id), "name": c.name, "input": c.arguments or {}}
+            for c in turn.tool_calls
+        ]
+        self.messages.append(
+            {"role": "assistant", "content": content or [{"type": "text", "text": "(no output)"}]}
+        )

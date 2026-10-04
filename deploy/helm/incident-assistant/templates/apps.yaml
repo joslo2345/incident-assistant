@@ -213,7 +213,19 @@ spec:
             - { name: AGENT_PROVIDER, value: {{ $v.model.provider | quote }} }
             - { name: AGENT_BASE_URL, value: {{ $v.model.baseUrl | quote }} }
             - { name: AGENT_MODEL, value: {{ $v.model.name | quote }} }
+            {{- /* The endpoint's key, e.g. the self-hosted vLLM's --api-key (Project B) */}}
+            {{- include "ia.secretEnv" (dict "key" "AGENT_LLM_API_KEY" "ctx" $ "optional" true) | nindent 12 }}
             {{- include "ia.secretEnv" (dict "key" "ANTHROPIC_API_KEY" "ctx" $ "optional" true) | nindent 12 }}
+            {{- with $v.model.fallback }}
+            {{- if .provider }}
+            - { name: AGENT_FALLBACK_PROVIDER, value: {{ .provider | quote }} }
+            - { name: AGENT_FALLBACK_BASE_URL, value: {{ .baseUrl | quote }} }
+            - { name: AGENT_FALLBACK_MODEL, value: {{ .name | quote }} }
+            - { name: AGENT_FALLBACK_AFTER_S, value: {{ .afterSeconds | quote }} }
+            - { name: AGENT_FALLBACK_COOLDOWN_S, value: {{ .cooldownSeconds | quote }} }
+            {{- include "ia.secretEnv" (dict "key" "AGENT_FALLBACK_LLM_API_KEY" "ctx" $ "optional" true) | nindent 12 }}
+            {{- end }}
+            {{- end }}
             - { name: AGENT_WATCH, value: {{ $v.agent.watch | quote }} }
             - { name: AGENT_SECURE_COOKIES, value: {{ $v.agent.secureCookies | quote }} }
           ports: [{ name: http, containerPort: 8002 }]

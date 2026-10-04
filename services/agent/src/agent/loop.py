@@ -368,7 +368,9 @@ class Investigator:
         )
         s.run.output_tokens += turn.usage.output_tokens
         s.last_input_tokens = turn.usage.input_tokens + turn.usage.cache_read_tokens
-        s.run.cost_usd += self.provider.price.cost(turn.usage)
+        # A fallback provider prices each turn by the model that produced it.
+        turn_cost = getattr(self.provider, "turn_cost", None)
+        s.run.cost_usd += turn_cost(turn) if turn_cost else self.provider.price.cost(turn.usage)
         await self._record(
             s,
             Step(
