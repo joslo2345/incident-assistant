@@ -84,12 +84,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
-      - name: helm lint and render (local and Azure values)
+      - name: helm lint and render (local, Azure, Azure + self-hosted model)
         run: |
           docker run --rm -v "$PWD:/src" -w /src alpine/helm:4.3.0 lint deploy/helm/incident-assistant
-          for values in deploy/kind/values.yaml deploy/helm/values-azure.yaml; do
+          for values in deploy/kind/values.yaml deploy/helm/values-azure.yaml \
+              "deploy/helm/values-azure.yaml -f deploy/helm/values-selfhosted.yaml"; do
+            # shellcheck disable=SC2086  # $values may hold two -f files
             docker run --rm -v "$PWD:/src" -w /src alpine/helm:4.3.0 template ia \
-              deploy/helm/incident-assistant -f "$values" > rendered.yaml
+              deploy/helm/incident-assistant -f $values > rendered.yaml
             docker run --rm -v "$PWD:/src" -w /src ghcr.io/yannh/kubeconform:v0.8.0 \
               -strict -summary -ignore-missing-schemas rendered.yaml
           done

@@ -158,29 +158,7 @@ class OpenAICompatSession:
             if calls:
                 # Record it as the tool call it was, so the tool results that follow pair up.
                 text = ""
-        self.messages.append(
-            {
-                "role": "assistant",
-                # Never null: a turn that used its whole budget on reasoning has no text and no
-                # tool calls, and Ollama rejects a null-content assistant message on the next
-                # request (found by the A6 baseline).
-                "content": text,
-                **(
-                    {
-                        "tool_calls": [
-                            {
-                                "id": c.id,
-                                "type": "function",
-                                "function": {"name": c.name, "arguments": c.raw_arguments},
-                            }
-                            for c in calls
-                        ]
-                    }
-                    if calls
-                    else {}
-                ),
-            }
-        )
+        self._append_assistant(text, calls)
         stop: StopReason = (
             "tool_use"
             if calls
@@ -194,6 +172,37 @@ class OpenAICompatSession:
             output_tokens=u.completion_tokens if u else 0,
         )
         return Turn(text, calls, usage, stop, response.model or self.p.model, reasoning)
+
+    def _append_assistant(self, text: str, calls: Sequence[ToolCall]) -> None:
+        self.messages.append(
+            {
+                "role": "assistant",
+                # Never null: a turn that used its whole budget on reasoning has no text and no
+                # tool calls, and Ollama rejects a null-content assistant message on the next
+                # request (found by the A6 baseline).
+                "content": text,
+                **(
+                    {
+                        "tool_calls": [
+                            {
+                                "id": c.id,
+                                "type": "function",
+                                "function": {
+                                    "name": c.name,
+                                    "arguments": c.raw_arguments or json.dumps(c.arguments or {}),
+                                },
+                            }
+                            for c in calls
+                        ]
+                    }
+                    if calls
+                    else {}
+                ),
+            }
+        )
+
+    def add_assistant(self, turn: Turn) -> None:
+        self._append_assistant(turn.text, turn.tool_calls)
 
     def add_tool_results(self, results: Sequence[ToolResult]) -> None:
         for r in results:

@@ -83,6 +83,10 @@ class ChatSession(Protocol):
     def add_tool_results(self, results: Sequence[ToolResult]) -> None: ...
     def add_user(self, text: str) -> None: ...
 
+    # An assistant turn produced elsewhere (another provider, when a fallback takes over a
+    # conversation), appended in this provider's native format.
+    def add_assistant(self, turn: Turn) -> None: ...
+
 
 class Provider(Protocol):
     name: str
@@ -137,3 +141,6 @@ class ScriptedSession:
 
     def add_user(self, text: str) -> None:
         self.transcript.append(("user", text))
+
+    def add_assistant(self, turn: Turn) -> None:
+        self.transcript.append(("assistant", turn))

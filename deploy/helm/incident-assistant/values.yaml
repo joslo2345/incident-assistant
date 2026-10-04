@@ -21,6 +21,8 @@ secrets:
     refreshInterval: 1h
     # Key Vault secret names are <prefix><key in lower-kebab-case>, e.g. ia-agent-db-password.
     remoteKeyPrefix: ia-
+    # Optional keys to sync too, e.g. [AGENT_LLM_API_KEY, ANTHROPIC_API_KEY] (values-selfhosted.yaml).
+    extraKeys: []
 
 postgres:
   # In-cluster TimescaleDB (dev and small installs) or an external managed Postgres with the
@@ -47,10 +49,19 @@ redpanda:
     limits: { memory: 1536Mi }
 
 # The investigation model: any OpenAI-compatible endpoint (Ollama, vLLM) or Anthropic.
+# An endpoint that needs a key (vLLM's --api-key) reads AGENT_LLM_API_KEY from the Secret.
 model:
   provider: openai_compat      # or "anthropic" (needs ANTHROPIC_API_KEY in the Secret)
   baseUrl: http://host.docker.internal:11434/v1   # kind on Docker Desktop: the Mac's Ollama
   name: qwen3-agent
+  # A second model that takes over when this one fails or is slower than afterSeconds; off while
+  # provider is empty. Its key, if any: AGENT_FALLBACK_LLM_API_KEY (or ANTHROPIC_API_KEY).
+  fallback:
+    provider: ""               # openai_compat or anthropic
+    baseUrl: ""
+    name: ""
+    afterSeconds: 120
+    cooldownSeconds: 60        # after a failure, new incidents skip the first model this long
 
 ingest:
   replicas: 2
