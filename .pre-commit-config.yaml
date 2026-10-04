@@ -9,6 +9,7 @@ repos:
         exclude: ^deploy/helm/.*/templates/   # Go templates; checked by helm lint + kubeconform
       - id: check-toml
       - id: check-added-large-files
+        exclude: ^docs/images/demo\.(gif|mp4)$   # the README demo, added on purpose
       - id: detect-private-key
 
   - repo: https://github.com/astral-sh/ruff-pre-commit

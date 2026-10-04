@@ -1,4 +1,6 @@
-![Incident Assistant: an incident with the agent's cited diagnosis and the GPU telemetry behind it](docs/images/03-incident.jpg)
+![Demo: a thermal fault is detected, the agent's cited diagnosis and tool trace, a technician approves the drain, and the audit log records it](docs/images/demo.gif)
+
+*Demo at 2x speed: sign in, the detector's incident, the agent's diagnosis with cited runbook sections and its tool-call trace, the GPU telemetry, approving the drain, the audit log. [Full-speed video (50 s)](docs/images/demo.mp4).*
 
 # Incident Assistant for GPU Fleets
 
