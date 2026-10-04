@@ -1,5 +1,6 @@
 import math
 import random
+from datetime import timedelta
 
 from detector_testkit import NODE, batch, bmc, gpu, minute
 
@@ -146,3 +147,17 @@ def test_same_failure_type_on_other_gpus_joins_one_incident() -> None:
     changed = d.process(batch(1, [gpu(1, g=g, thermal_throttled=3, temp_max=88) for g in range(4)]))
     assert len({inc.incident_id for inc in changed}) == 1
     assert changed[0].gpus == [0, 1, 2, 3]
+
+
+def test_incident_opened_by_an_alert_inside_the_minute_is_valid() -> None:
+    # A BMC entry 26 s into minute 1 opens the incident while minute 1 (:00) is processed; the
+    # contract rejected updated_at before created_at and crashed the detector.
+    d = Detector(STATIC, "t")
+    d.process(batch(0, [gpu(0)]))
+    t = minute(1) + timedelta(seconds=26)
+    changed = d.process(
+        batch(1, [gpu(1)], bmc=[bmc(1, time=t, sensor_type="fan", sensor_name="FAN2")])
+    )
+    contract = changed[-1].to_contract()
+    assert contract.created_at == t
+    assert contract.updated_at >= contract.created_at
