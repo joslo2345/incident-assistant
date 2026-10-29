@@ -43,7 +43,7 @@ services:
         rpk -X brokers=redpanda:9092 topic list
 
   timescaledb:
-    image: timescale/timescaledb:2.30.2-pg17
+    image: timescale/timescaledb:2.31.0-pg17
     environment:
       POSTGRES_DB: telemetry
       POSTGRES_USER: postgres
